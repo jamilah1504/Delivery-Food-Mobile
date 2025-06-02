@@ -30,14 +30,51 @@ export default function AppLayout() {
     }
   }, [loaded]);
 
+  const isLoggedIn = true; // contoh kondisi
+
+  // 🎯 Konfigurasi tab yang akan ditampilkan
+  const tabsConfig = {
+    keranjang: { 
+      visible: true, // Hanya tampil jika sudah login
+      requiresAuth: true 
+    },
+    wishlist: { 
+      visible: true, // Hanya tampil jika sudah login
+      requiresAuth: true 
+    },
+    home: { 
+      visible: true, // Selalu tampil
+      requiresAuth: true 
+    },
+    explore: { 
+      visible: true, // Selalu tampil
+      requiresAuth: true 
+    },
+    notification: { 
+      visible: true, // Hanya tampil jika sudah login
+      requiresAuth: true 
+    },
+    index: { 
+      visible: false, // Hanya tampil jika sudah login
+      requiresAuth: true 
+    },
+    profile: { 
+      visible: true, // Hanya tampil jika sudah login
+      requiresAuth: true 
+    },
+  };
+
+  // 🎯 Alternatif: Bisa juga menggunakan array sederhana
+  // const visibleTabs = ['home', 'explore', 'profile']; // Hanya 3 tab ini yang akan muncul
+
   return (
     <SessionProvider>
       <SafeAreaProvider>
         <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
           <Tabs
             screenOptions={{
-              tabBarActiveTintColor: "#536001", // Warna aktif yang diminta
-              tabBarInactiveTintColor: "#999", // Warna default ketika tidak aktif
+              tabBarActiveTintColor: "#536001",
+              tabBarInactiveTintColor: "#999",
               headerShown: false,
               tabBarButton: HapticTab,
               tabBarBackground: TabBarBackground,
@@ -45,10 +82,12 @@ export default function AppLayout() {
               tabBarItemStyle: styles.tabBarItem,
             }}
           >
+            {/* Tab Keranjang */}
             <Tabs.Screen
               name="keranjang"
               options={{
                 title: "Keranjang",
+                href: tabsConfig.keranjang.visible ? "/keranjang" : null, // 🎯 Key solution!
                 tabBarIcon: ({ focused }) => (
                   <AntDesign
                     name="shoppingcart"
@@ -58,10 +97,13 @@ export default function AppLayout() {
                 ),
               }}
             />
+
+            {/* Tab Wishlist */}
             <Tabs.Screen
               name="wishlist"
               options={{
                 title: "Wishlist",
+                href: tabsConfig.wishlist.visible ? "/wishlist" : null, // 🎯 Key solution!
                 tabBarIcon: ({ focused }) => (
                   <AntDesign
                     name="hearto"
@@ -71,10 +113,13 @@ export default function AppLayout() {
                 ),
               }}
             />
+
+            {/* Tab Home - Selalu Tampil */}
             <Tabs.Screen
-              name="index"
+              name="home"
               options={{
                 title: "Home",
+                href: tabsConfig.home.visible ? "/home" : null, // 🎯 Key solution!
                 tabBarIcon: ({ focused }) => (
                   <AntDesign
                     name="home"
@@ -84,6 +129,8 @@ export default function AppLayout() {
                 ),
               }}
             />
+
+            {/* Tab Explore - Selalu Tampil */}
             <Tabs.Screen
               name="explore"
               options={{
@@ -97,10 +144,13 @@ export default function AppLayout() {
                 ),
               }}
             />
+
+            {/* Tab Notification */}
             <Tabs.Screen
               name="notification"
               options={{
                 title: "Notifikasi",
+                href: tabsConfig.notification.visible ? "/notification" : null, // 🎯 Key solution!
                 tabBarIcon: ({ focused }) => (
                   <AntDesign
                     name="notification"
@@ -111,9 +161,26 @@ export default function AppLayout() {
               }}
             />
             <Tabs.Screen
+              name="index"
+              options={{
+                title: "Login",
+                href: tabsConfig.index.visible ? "/index" : null, // 🎯 Key solution!
+                tabBarIcon: ({ focused }) => (
+                  <AntDesign
+                    name="notification"
+                    size={24}
+                    color={focused ? "#536001" : "#999"}
+                  />
+                ),
+              }}
+            />
+
+            {/* Tab Profile */}
+            <Tabs.Screen
               name="profile"
               options={{
                 title: "Profil",
+                href: tabsConfig.profile.visible ? "/profile" : null, // 🎯 Key solution!
                 tabBarIcon: ({ focused }) => (
                   <AntDesign
                     name="user"
@@ -131,24 +198,26 @@ export default function AppLayout() {
   );
 }
 
-// 🔧 Styling untuk Tab Bar Oval/Square
+// 🔧 Styling untuk Tab Bar
 const styles = StyleSheet.create({
-  // tabBar: {
-  //   position: "absolute",
-  //   bottom: 20,
-  //   left: 20,
-  //   right: 20,
-  //   height: 60,
-  //   borderRadius: 30, // Membuat oval
-  //   backgroundColor: "#fff",
-  //   elevation: 5,
-  //   shadowColor: "#000",
-  //   shadowOpacity: 0.1,
-  //   shadowRadius: 10,
-  //   shadowOffset: { width: 0, height: 5 },
-  // },
+  tabBar: {
+    // Uncomment jika ingin style oval/floating
+    // position: "absolute",
+    // bottom: 20,
+    // left: 20,
+    // right: 20,
+    // height: 60,
+    // borderRadius: 30,
+    // backgroundColor: "#fff",
+    // elevation: 5,
+    // shadowColor: "#000",
+    // shadowOpacity: 0.1,
+    // shadowRadius: 10,
+    // shadowOffset: { width: 0, height: 5 },
+  },
   tabBarItem: {
     borderRadius: 20,
     paddingVertical: 10,
   },
-});
+}
+);

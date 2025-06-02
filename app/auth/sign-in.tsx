@@ -9,6 +9,7 @@ import { ThemedText } from "../../components/ThemedText";
 import { ThemedTextInput } from "../../components/ThemedTextInput";
 import { ThemedView } from "../../components/ThemedView";
 import { useSession } from "../../store/auth/auth-context";
+import { AuthContext } from "@/utils/AuthContext";
 
 export default function SignIn() {
   const { signIn, error, isLoading, session } = useSession();
@@ -31,6 +32,7 @@ export default function SignIn() {
 
   const [canSubmit, setCanSubmit] = useState(false);
   const [securePasswordEntry, setSecurePasswordEntry] = useState(true);
+  const { login } = useContext(AuthContext);
 
   const styles = ScaledSheet.create({
     wrapper: {

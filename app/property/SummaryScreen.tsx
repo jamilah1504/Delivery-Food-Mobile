@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 
 interface CartItem {
   id: string;
@@ -42,6 +43,55 @@ interface DeliveryData {
   image: any;
   address: Address;
 }
+
+// API Configuration
+const API_BASE_URL = "http://127.0.0.1:8000/api"; // Replace with your actual API URL
+const API_ENDPOINTS = {
+  createOrder: `${API_BASE_URL}/orders`,
+  getOrderStatus: (orderId: string) => `${API_BASE_URL}/orders/${orderId}`,
+};
+
+// Create axios instance with default config
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds timeout
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
+
+// Add request interceptor to include auth token if available
+apiClient.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.log('Error getting auth token:', error);
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Handle unauthorized access
+      Alert.alert('Session Expired', 'Please login again');
+    } else if (error.response?.status >= 500) {
+      Alert.alert('Server Error', 'Something went wrong. Please try again.');
+    }
+    return Promise.reject(error);
+  }
+);
 
 const paymentImages: Record<string, any> = {
   dana: require("@/assets/images/dana.png"),
@@ -84,6 +134,7 @@ const SummaryScreen = () => {
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [deliveryData, setDeliveryData] = useState<DeliveryData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -163,12 +214,159 @@ const SummaryScreen = () => {
     return subtotal + paymentFee + deliveryFee;
   };
 
-  const handleCompleteOrder = () => {
-    Alert.alert(
-      "Pesanan Berhasil",
-      "Terima kasih telah berbelanja dengan kami",
-      [{ text: "OK", onPress: () => router.replace("/") }]
-    );
+  // Prepare order data for API
+  const prepareOrderData = () => {
+    const subtotal = calculateSubtotal();
+    const total = calculateTotal();
+    
+    return {
+      items: cartItems.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: safeParseInteger(item.price),
+        quantity: safeParseInteger(item.quantity),
+        subtotal: safeParseInteger(item.price) * safeParseInteger(item.quantity)
+      })),
+      payment: {
+        method: paymentData?.paymentMethod,
+        option: paymentData?.paymentOption,
+        fee: safeParseInteger(paymentData?.paymentFee)
+      },
+      delivery: {
+        method: deliveryData?.method,
+        fee: safeParseInteger(deliveryData?.fee),
+        address: {
+          street: deliveryData?.address.street,
+          city: deliveryData?.address.city,
+          province: deliveryData?.address.province,
+          postalCode: deliveryData?.address.postalCode,
+          phone: deliveryData?.address.phone
+        }
+      },
+      summary: {
+        subtotal,
+        paymentFee: safeParseInteger(paymentData?.paymentFee),
+        deliveryFee: safeParseInteger(deliveryData?.fee),
+        total
+      },
+      orderDate: new Date().toISOString(),
+      status: 'pending'
+    };
+  };
+
+  // Submit order to API
+  const submitOrder = async (orderData: any) => {
+    try {
+      const response = await apiClient.post('/orders', orderData);
+      
+      if (response.status === 200 || response.status === 201) {
+        return {
+          success: true,
+          orderId: response.data.orderId || response.data.id,
+          message: response.data.message || 'Order created successfully'
+        };
+      } else {
+        throw new Error('Unexpected response status');
+      }
+    } catch (error: any) {
+      console.error('API Error:', error);
+      
+      let errorMessage = 'Gagal mengirim pesanan. Silakan coba lagi.';
+      
+      if (error.response) {
+        // Server responded with error status
+        errorMessage = error.response.data?.message || 
+                     error.response.data?.error || 
+                     `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  };
+
+  // Handle order completion
+  const handleCompleteOrder = async () => {
+    if (!paymentData || !deliveryData || cartItems.length === 0) {
+      Alert.alert("Error", "Data pesanan tidak lengkap");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      // Prepare order data
+      const orderData = prepareOrderData();
+      
+      // Show loading alert
+      Alert.alert(
+        "Memproses Pesanan",
+        "Sedang mengirim pesanan Anda...",
+        [],
+        { cancelable: false }
+      );
+
+      // Submit to API
+      const result = await submitOrder(orderData);
+
+      if (result.success) {
+        // Save order ID for future reference
+        if (result.orderId) {
+          await AsyncStorage.setItem('lastOrderId', result.orderId);
+        }
+
+        // Clear cart after successful order
+        await AsyncStorage.removeItem('cartItems');
+
+        // Show success message
+        Alert.alert(
+          "Pesanan Berhasil!",
+          `Terima kasih telah berbelanja dengan kami.\n${result.orderId ? `ID Pesanan: ${result.orderId}` : ''}`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Navigate to order confirmation or home
+                router.replace({
+                  pathname: "/order-success",
+                  params: {
+                    orderId: result.orderId,
+                    total: calculateTotal().toString()
+                  }
+                });
+              }
+            }
+          ]
+        );
+      } else {
+        // Show error message
+        Alert.alert(
+          "Gagal Memproses Pesanan",
+          result.error,
+          [
+            { text: "Coba Lagi", onPress: () => handleCompleteOrder() },
+            { text: "Batal" }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Order submission error:', error);
+      Alert.alert(
+        "Error",
+        "Terjadi kesalahan tidak terduga. Silakan coba lagi.",
+        [
+          { text: "Coba Lagi", onPress: () => handleCompleteOrder() },
+          { text: "Batal" }
+        ]
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -325,13 +523,36 @@ const SummaryScreen = () => {
         </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.completeButton}
-        onPress={goToConfirmationPage}
-        disabled={!paymentData || !deliveryData || cartItems.length === 0}
-      >
-        <Text style={styles.completeButtonText}>Selesaikan Pesanan</Text>
-      </TouchableOpacity>
+      {/* Action Buttons */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.secondaryButton, { marginBottom: 12 }]}
+          onPress={goToConfirmationPage}
+          disabled={!paymentData || !deliveryData || cartItems.length === 0 || submitting}
+        >
+          <Text style={styles.secondaryButtonText}>Konfirmasi Pesanan</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.completeButton,
+            submitting && styles.completeButtonDisabled
+          ]}
+          onPress={handleCompleteOrder}
+          disabled={!paymentData || !deliveryData || cartItems.length === 0 || submitting}
+        >
+          {submitting ? (
+            <View style={styles.loadingButton}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={[styles.completeButtonText, { marginLeft: 8 }]}>
+                Memproses...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.completeButtonText}>Selesaikan Pesanan</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };
@@ -481,6 +702,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#e74c3c",
   },
+  buttonContainer: {
+    marginTop: 8,
+  },
+  secondaryButton: {
+    backgroundColor: "#3498db",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
+  },
   completeButton: {
     backgroundColor: "#FFA500",
     padding: 16,
@@ -494,6 +729,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  loadingButton: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 });
 
