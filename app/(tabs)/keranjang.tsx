@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 20,
-    color: "#536001",
+    color: "#161b44",
   },
   loadingText: {
     marginTop: 10,

@@ -38,10 +38,6 @@ export default function AppLayout() {
       visible: true, // Hanya tampil jika sudah login
       requiresAuth: true 
     },
-    wishlist: { 
-      visible: true, // Hanya tampil jika sudah login
-      requiresAuth: true 
-    },
     home: { 
       visible: true, // Selalu tampil
       requiresAuth: true 
@@ -73,7 +69,7 @@ export default function AppLayout() {
         <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
           <Tabs
             screenOptions={{
-              tabBarActiveTintColor: "#536001",
+              tabBarActiveTintColor: "#161b44",
               tabBarInactiveTintColor: "#999",
               headerShown: false,
               tabBarButton: HapticTab,
@@ -92,23 +88,7 @@ export default function AppLayout() {
                   <AntDesign
                     name="shoppingcart"
                     size={24}
-                    color={focused ? "#536001" : "#999"}
-                  />
-                ),
-              }}
-            />
-
-            {/* Tab Wishlist */}
-            <Tabs.Screen
-              name="wishlist"
-              options={{
-                title: "Wishlist",
-                href: tabsConfig.wishlist.visible ? "/wishlist" : null, // 🎯 Key solution!
-                tabBarIcon: ({ focused }) => (
-                  <AntDesign
-                    name="hearto"
-                    size={24}
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}
@@ -124,7 +104,7 @@ export default function AppLayout() {
                   <AntDesign
                     name="home"
                     size={24}
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}
@@ -139,7 +119,7 @@ export default function AppLayout() {
                   <IconSymbol
                     size={28}
                     name="paperplane.fill"
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}
@@ -155,7 +135,7 @@ export default function AppLayout() {
                   <AntDesign
                     name="notification"
                     size={24}
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}
@@ -169,7 +149,7 @@ export default function AppLayout() {
                   <AntDesign
                     name="notification"
                     size={24}
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}
@@ -185,7 +165,7 @@ export default function AppLayout() {
                   <AntDesign
                     name="user"
                     size={24}
-                    color={focused ? "#536001" : "#999"}
+                    color={focused ? "#161b44" : "#999"}
                   />
                 ),
               }}

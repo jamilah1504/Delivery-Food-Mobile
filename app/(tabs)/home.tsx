@@ -24,7 +24,6 @@ interface User {
 export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Menu");
-  const [wishlist, setWishlist] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,30 +129,7 @@ export default function HomeScreen() {
     }
 };
 
-  const toggleWishlist = (item) => {
-    if (wishlist.some((fav) => fav.id === item.id)) {
-      setWishlist(wishlist.filter((fav) => fav.id !== item.id));
-    } else {
-      setWishlist([...wishlist, item]);
-    }
-  };
-
-  const goToWishlist = () => {
-    if (wishlist.length > 0) {
-      console.log("Data wishlist yang dikirim:", wishlist);
-      router.push({
-        pathname: "/wishlist",
-        params: { wishlist: JSON.stringify(wishlist) },
-      });
-    } else {
-      console.log("Wishlist kosong, tidak ada data yang dikirim.");
-      router.push({
-        pathname: "/wishlist",
-        params: { wishlist: JSON.stringify([]) },
-      });
-    }
-  };
-
+  
   if (loading) {
     return (
       <View style={styles.container}>
@@ -178,14 +154,7 @@ export default function HomeScreen() {
           style={styles.logo}
         />
         <Text style={styles.headerTitle}>TNDH Food</Text>
-        <TouchableOpacity onPress={goToWishlist} style={styles.wishlistIcon}>
-          <Ionicons name="heart" size={24} color="red" />
-          {wishlist.length > 0 && (
-            <View style={styles.wishlistBadge}>
-              <Text style={styles.wishlistBadgeText}>{wishlist.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        
       </View>
 
       <View style={styles.searchContainer}>
@@ -274,22 +243,6 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <View style={styles.categoryCard}>
             <Image source={item.image} style={styles.productImage} />
-            <TouchableOpacity
-              style={styles.favorite}
-              onPress={() => toggleWishlist(item)}
-            >
-              <Ionicons
-                name={
-                  wishlist.some((fav) => fav.id === item.id)
-                    ? "heart"
-                    : "heart-outline"
-                }
-                size={20}
-                color={
-                  wishlist.some((fav) => fav.id === item.id) ? "red" : "black"
-                }
-              />
-            </TouchableOpacity>
             <View style={styles.infoContainer}>
               <Text style={styles.category}>{item.category}</Text>
               <Text style={styles.name}>{item.name}</Text>
@@ -340,25 +293,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 26, // Increased font size for better visibility
     fontWeight: "bold",
-    color: "#536001", // Hijau Tua
-  },
-  wishlistIcon: {
-    position: "relative",
-  },
-  wishlistBadge: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    backgroundColor: "#FF7C71", // Merah Muda
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  wishlistBadgeText: {
-    color: "white",
-    fontSize: 12,
+    color: "#161b44", // Hijau Tua
   },
   searchContainer: {
     flexDirection: "row",
@@ -378,7 +313,7 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     marginRight: 10,
-    color: "#536001", // Hijau Tua
+    color: "#161b44", // Hijau Tua
   },
   searchInput: {
     flex: 1,
@@ -390,7 +325,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 24, // Increased font size for better visibility
     fontWeight: "bold",
-    color: "#536001", // Hijau Tua
+    color: "#161b44", // Hijau Tua
     marginLeft: 16,
     marginTop: 24,
     marginBottom: 8,
@@ -485,7 +420,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   category: {
-    backgroundColor: "#536001", // Hijau Tua
+    backgroundColor: "#161b44", // Hijau Tua
     color: "white",
     fontSize: 12,
     paddingVertical: 2,

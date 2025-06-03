@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#28a745",
+    color: "#161b44",
   },
   inputContainer: {
     marginBottom: 16,
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   proceedButton: {
-    backgroundColor: "#28a745",
+    backgroundColor: "#161b44",
   },
   proceedButtonText: {
     color: "#fff",

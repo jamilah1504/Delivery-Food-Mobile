@@ -142,7 +142,7 @@ const PaymentSuccessScreen = () => {
           onPress={() => navigation.navigate('OrderHistory')}
           activeOpacity={0.8}
         >
-          <Icon name="receipt-long" size={24} color="#4CAF50" />
+          <Icon name="receipt-long" size={24} color="#161b44" />
           <Text style={styles.orderButtonText}>Lihat Pesanan</Text>
         </TouchableOpacity>
       </View>
@@ -168,10 +168,10 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#161b44',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4CAF50',
+    shadowColor: '#161b44',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -268,13 +268,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   homeButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#161b44',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: '#4CAF50',
+    shadowColor: '#161b44',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -297,10 +297,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#161b44',
   },
   orderButtonText: {
-    color: '#4CAF50',
+    color: '#161b44',
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
