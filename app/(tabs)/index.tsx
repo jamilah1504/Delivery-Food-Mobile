@@ -13,9 +13,8 @@ import {
   View,
 } from "react-native";
 
-// Service API
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api", // Ganti dengan IP lokal Anda atau gunakan ngrok
+  baseURL: "http://127.0.0.1:8000/api", // Replace with your actual server URL or use ngrok
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -72,6 +71,16 @@ export default function HomeScreen() {
   const [error, setError] = useState(null);
   const router = useRouter();
 
+  // Define icon mappings for categories (customize based on your category names)
+  const categoryIcons = {
+    "All Menu": "list",
+    Makanan: "fast-food",
+    Minuman: "water",
+    Cemilan: "pizza",
+    "Makanan Berat": "restaurant",
+    // Add more categories and icons as needed
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -117,7 +126,11 @@ export default function HomeScreen() {
   };
 
   const goToNotifications = () => {
-    router.push("/notifications"); // Rute ke halaman notifikasi
+    router.push("/notifications");
+  };
+
+  const goToProductDetail = (id) => {
+    router.push(`/property/${id}`);
   };
 
   if (loading) {
@@ -205,7 +218,11 @@ export default function HomeScreen() {
           ]}
           onPress={() => setSelectedCategory("All Menu")}
         >
-          <Ionicons name="list" size={20} color="#333" />
+          <Ionicons
+            name={categoryIcons["All Menu"]}
+            size={20}
+            color={selectedCategory === "All Menu" ? "#FFFFFF" : "#333"}
+          />
           <Text
             style={[
               styles.filterButtonText,
@@ -224,7 +241,11 @@ export default function HomeScreen() {
             ]}
             onPress={() => setSelectedCategory(category.name)}
           >
-            <Ionicons name="fast-food" size={20} color="#333" />
+            <Ionicons
+              name={categoryIcons[category.name] || "fast-food"} // Fallback to "fast-food" if no specific icon
+              size={20}
+              color={selectedCategory === category.name ? "#FFFFFF" : "#333"}
+            />
             <Text
               style={[
                 styles.filterButtonText,
@@ -245,7 +266,11 @@ export default function HomeScreen() {
         numColumns={2}
         contentContainerStyle={styles.categoryList}
         renderItem={({ item }) => (
-          <View style={styles.categoryCard}>
+          <TouchableOpacity
+            style={styles.categoryCard}
+            onPress={() => goToProductDetail(item.id)}
+            activeOpacity={0.7}
+          >
             <Image
               source={{
                 uri: `http://127.0.0.1:8000/storage/${
@@ -279,7 +304,7 @@ export default function HomeScreen() {
                 <Ionicons name="cart-outline" size={16} color="white" />
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </ScrollView>
@@ -499,6 +524,11 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#FF3B30",
     textAlign: "center",
+    margin: 16,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#7E8B9F",
     margin: 16,
   },
 });
