@@ -1,5 +1,5 @@
+import axiosInstance from "@/utils/axiosInstance";
 import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -12,18 +12,22 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+interface Product {
+  id: number;
+  name: string;
+  category: string;
+  price: string;
+  old_price?: string;
+  oldPrice?: string;
+  image: string;
+  rating?: number;
+  sold?: number;
+}
 
-const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api", // Replace with your actual server URL or use ngrok
-  headers: {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  },
-});
 
 const getSliders = async () => {
   try {
-    const response = await api.get("/sliders");
+    const response = await axiosInstance.get("/sliders");
     return response.data.data || [];
   } catch (error) {
     console.error("Error fetching sliders:", error);
@@ -33,7 +37,7 @@ const getSliders = async () => {
 
 const getCategories = async () => {
   try {
-    const response = await api.get("/categories");
+    const response = await axiosInstance.get("/categories");
     return response.data.data || [];
   } catch (error) {
     console.error("Error fetching categories:", error);
@@ -43,7 +47,7 @@ const getCategories = async () => {
 
 const getProducts = async () => {
   try {
-    const response = await api.get("/products");
+    const response = await axiosInstance.get("/products");
     return (
       response.data.data.map((item) => ({
         ...item,
@@ -118,12 +122,26 @@ export default function HomeScreen() {
     }
   });
 
-  const handleAddToCart = (item) => {
-    router.push({
-      pathname: "/keranjang",
-      params: { item: JSON.stringify(item) },
-    });
-  };
+const handleAddToCart = async (item: Product): Promise<void> => {
+    try {
+      // Data yang akan dikirim ke axiosInstance
+      const cartData = {
+        product_id: parseInt(item.id.toString()), // Convert back to number for axiosInstance
+        user_id: 1, // TODO: Replace with actual user ID from auth context/storage
+        quantity: 1
+      };
+
+      const response = await axiosInstance.post("/cart", cartData);
+      
+      if (response.status === 200 || response.status === 201) {
+        console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
+        router.push('/keranjang');
+      }
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      console.log("Gagal menambahkan item ke keranjang. Silakan coba lagi.");
+    }
+};
 
   const goToNotifications = () => {
     router.push("/notifications");
@@ -189,7 +207,7 @@ export default function HomeScreen() {
             <View key={index} style={styles.carouselItem}>
               <Image
                 source={{
-                  uri: `http://127.0.0.1:8000/storage/${
+                  uri: `http://192.168.137.63:8000/storage/${
                     item.image || "placeholder.jpg"
                   }`,
                 }}
@@ -197,7 +215,7 @@ export default function HomeScreen() {
                 resizeMode="cover"
                 onError={(e) =>
                   console.log(
-                    `Failed to load slider image: http://127.0.0.1:8000/storage/${item.image}`,
+                    `Failed to load slider image: http://192.168.137.63:8000/storage/${item.image}`,
                     e.nativeEvent.error
                   )
                 }
@@ -273,7 +291,7 @@ export default function HomeScreen() {
           >
             <Image
               source={{
-                uri: `http://127.0.0.1:8000/storage/${
+                uri: `http://192.168.137.63:8000/storage/${
                   item.image || "placeholder.jpg"
                 }`,
               }}
@@ -281,7 +299,7 @@ export default function HomeScreen() {
               resizeMode="cover"
               onError={(e) =>
                 console.log(
-                  `Failed to load product image: http://127.0.0.1:8000/storage/${item.image}`,
+                  `Failed to load product image: http://192.168.137.63:8000/storage/${item.image}`,
                   e.nativeEvent.error
                 )
               }

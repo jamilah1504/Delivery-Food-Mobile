@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
+import axiosInstance from "@/utils/axiosInstance";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -10,14 +10,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
-const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
-  headers: {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  },
-});
+interface Product {
+  id: number;
+  name: string;
+  category: string;
+  price: string;
+  old_price?: string;
+  oldPrice?: string;
+  image: string;
+  rating?: number;
+  sold?: number;
+}
 
 export default function ProductDetail() {
   const { id } = useLocalSearchParams();
@@ -30,7 +33,7 @@ export default function ProductDetail() {
     const fetchProduct = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/products/${id}`);
+        const response = await axiosInstance.get(`/products/${id}`);
         const item = response.data.data;
 
         // Format harga
@@ -55,6 +58,27 @@ export default function ProductDetail() {
 
     fetchProduct();
   }, [id]);
+
+  const handleAddToCart = async (item: Product): Promise<void> => {
+    try {
+      // Data yang akan dikirim ke axiosInstance
+      const cartData = {
+        product_id: parseInt(item.id.toString()), // Convert back to number for axiosInstance
+        user_id: 1, // TODO: Replace with actual user ID from auth context/storage
+        quantity: 1
+      };
+
+      const response = await axios.post("http://192.168.137.63:8000/axiosInstance/cart", cartData);
+      
+      if (response.status === 200 || response.status === 201) {
+        console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
+        router.push('/keranjang');
+      }
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      console.log("Gagal menambahkan item ke keranjang. Silakan coba lagi.");
+    }
+};
 
   if (loading) {
     return (
@@ -92,7 +116,7 @@ export default function ProductDetail() {
 
       <Image
         source={{
-          uri: `http://127.0.0.1:8000/storage/${
+          uri: `http://192.168.137.63:8000/storage/${
             product.image || "placeholder.jpg"
           }`,
         }}
@@ -125,7 +149,10 @@ export default function ProductDetail() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.cartButton}>
+        <TouchableOpacity
+          style={styles.cartButton}
+          onPress={() => handleAddToCart(product)}
+        >
           <Text style={styles.cartText}>Tambah ke Keranjang</Text>
           <Ionicons name="cart-outline" size={20} color="white" />
         </TouchableOpacity>
