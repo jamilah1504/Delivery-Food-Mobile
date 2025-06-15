@@ -13,7 +13,7 @@ import {
 type CartItem = {
   id: string;
   name: string;
-  price: string;
+  price: number; // Diubah dari string ke number untuk konsistensi
   image: any;
   quantity: number;
 };
@@ -28,18 +28,27 @@ export default function Keranjang() {
     if (params.item) {
       const item = JSON.parse(params.item);
 
+      // Pastikan price dikonversi ke number jika masih string
+      const normalizedItem = {
+        ...item,
+        price:
+          typeof item.price === "string"
+            ? parseFloat(item.price.replace(/[^0-9.-]+/g, ""))
+            : item.price || 0,
+      };
+
       setCartItems((prevItems) => {
         const existingItem = prevItems.find(
-          (cartItem) => cartItem.id === item.id
+          (cartItem) => cartItem.id === normalizedItem.id
         );
         if (existingItem) {
           return prevItems.map((cartItem) =>
-            cartItem.id === item.id
+            cartItem.id === normalizedItem.id
               ? { ...cartItem, quantity: cartItem.quantity + 1 }
               : cartItem
           );
         } else {
-          return [...prevItems, { ...item, quantity: 1 }];
+          return [...prevItems, { ...normalizedItem, quantity: 1 }];
         }
       });
     }
@@ -70,9 +79,18 @@ export default function Keranjang() {
     setCartItems((prevItems) => prevItems.filter((item) => item.id !== id));
   };
 
-  // Hitung total harga
+  // Hitung total harga dengan numberFormat
+  const numberFormat = (value: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "decimal",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   const totalAmount = cartItems.reduce((sum, item) => {
-    const price = parseFloat(item.price.replace("Rp. ", "").replace(".", ""));
+    // Pastikan price adalah number sebelum perhitungan
+    const price = typeof item.price === "number" ? item.price : 0;
     return sum + price * item.quantity;
   }, 0);
 
@@ -95,7 +113,9 @@ export default function Keranjang() {
             />
             <View style={styles.itemDetails}>
               <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemPrice}>{item.price}</Text>
+              <Text style={styles.itemPrice}>
+                Rp. {numberFormat(item.price)}
+              </Text>
             </View>
             <View style={styles.quantityContainer}>
               <TouchableOpacity
@@ -124,9 +144,7 @@ export default function Keranjang() {
 
       <View style={styles.footer}>
         <Text style={styles.totalText}>Total Belanja</Text>
-        <Text style={styles.totalPrice}>
-          Rp. {totalAmount.toLocaleString()}
-        </Text>
+        <Text style={styles.totalPrice}>Rp. {numberFormat(totalAmount)}</Text>
       </View>
 
       <TouchableOpacity

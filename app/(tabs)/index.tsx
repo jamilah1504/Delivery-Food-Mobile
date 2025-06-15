@@ -104,10 +104,14 @@ const getProducts = async () => {
         ? response.data.data.map((item) => ({
             ...item,
             category: categoryMap[item.id_category] || "unknown",
-            price: item.price ? parseFloat(item.price) : 0,
-            discount_price: item.discount_price
-              ? parseFloat(item.discount_price)
-              : 0,
+            price:
+              typeof item.price === "string"
+                ? parseFloat(item.price.replace(/[^0-9.-]+/g, ""))
+                : parseFloat(item.price) || 0,
+            discount_price:
+              typeof item.discount_price === "string"
+                ? parseFloat(item.discount_price.replace(/[^0-9.-]+/g, ""))
+                : parseFloat(item.discount_price) || 0,
             stock_status: item.stock_status || "available",
             is_available:
               item.is_available !== undefined ? item.is_available : true,
@@ -194,6 +198,13 @@ export default function HomeScreen() {
 
   // Fungsi navigasi
   const handleAddToCart = (item) => {
+    // Validasi dan log untuk debugging
+    console.log("Adding to cart:", item);
+    console.log("Price type:", typeof item.price, "Value:", item.price);
+    if (isNaN(item.price) || item.price === null || item.price === undefined) {
+      console.warn("Invalid price detected, defaulting to 0");
+      item.price = 0; // Default jika price tidak valid
+    }
     router.push({
       pathname: "/keranjang",
       params: { item: JSON.stringify(item) },
