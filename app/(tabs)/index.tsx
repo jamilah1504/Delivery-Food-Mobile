@@ -1,8 +1,9 @@
 import axiosInstance from "@/utils/axiosInstance";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  Dimensions,
   FlatList,
   Image,
   ScrollView,
@@ -12,36 +13,33 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-interface Product {
-  id: number;
-  name: string;
-  category: string;
-  price: string;
-  old_price?: string;
-  oldPrice?: string;
-  image: string;
-  rating?: number;
-  sold?: number;
-}
 
+// const api = axios.create({
+//   baseURL: "http://127.0.0.1:8000/api", // Replace with your actual server URL or use ngrok
+//   headers: {
+//     "Content-Type": "application/json",
+//     Accept: "application/json",
+//   },
+// });
 
 const getSliders = async () => {
   try {
     const response = await axiosInstance.get("/sliders");
     return response.data.data || [];
   } catch (error) {
-    console.error("Error fetching sliders:", error);
+    console.error("Error fetching sliders:", error.message);
     return [];
   }
 };
 
+// Fetch categories
 const getCategories = async () => {
   try {
     const response = await axiosInstance.get("/categories");
     return response.data.data || [];
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    return [];
+    console.error("Error fetching categories:", error.message);
+    return [{ id: 0, name: "All Menu", icon: "list" }];
   }
 };
 
@@ -49,18 +47,28 @@ const getProducts = async () => {
   try {
     const response = await axiosInstance.get("/products");
     return (
-      response.data.data.map((item) => ({
-        ...item,
-        price: item.price
-          ? `Rp. ${Number(item.price).toLocaleString("id-ID")}`
-          : "Rp. 0",
-        oldPrice: item.old_price
-          ? `Rp. ${Number(item.old_price).toLocaleString("id-ID")}`
-          : null,
-      })) || []
+      (Array.isArray(response.data.data)
+        ? response.data.data.map((item) => ({
+            ...item,
+            category: categoryMap[item.id_category] || "unknown",
+            price:
+              typeof item.price === "string"
+                ? parseFloat(item.price.replace(/[^0-9.-]+/g, ""))
+                : parseFloat(item.price) || 0,
+            discount_price:
+              typeof item.discount_price === "string"
+                ? parseFloat(item.discount_price.replace(/[^0-9.-]+/g, ""))
+                : parseFloat(item.discount_price) || 0,
+            stock_status: item.stock_status || "available",
+            is_available:
+              item.is_available !== undefined ? item.is_available : true,
+            rating: item.rating || "N/A",
+            sold: item.sold || 0,
+          }))
+        : []) || []
     );
   } catch (error) {
-    console.error("Error fetching products:", error);
+    console.error("Error fetching products:", error.message);
     return [];
   }
 };
@@ -69,45 +77,51 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Menu");
   const [sliders, setSliders] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState([
+    { id: 0, name: "All Menu", icon: "list" },
+  ]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notificationCount, setNotificationCount] = useState(0);
   const router = useRouter();
 
-  // Define icon mappings for categories (customize based on your category names)
-  const categoryIcons = {
-    "All Menu": "list",
-    Makanan: "fast-food",
-    Minuman: "water",
-    Cemilan: "pizza",
-    "Makanan Berat": "restaurant",
-    // Add more categories and icons as needed
+  const getNotifications = async () => {
+    try {
+      const response = await axiosInstance.get("/notifications");
+      console.log("Raw Notifications API Response:", response.data);
+      const unreadCount =
+        response.data.data.filter((notif) => !notif.is_read).length || 0;
+      setNotificationCount(unreadCount);
+    } catch (error) {
+      console.error("Error fetching notifications:", error.message);
+      setNotificationCount(0);
+    }
+  };
+
+  // Fetch data
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [sliderData, categoryData, productData] = await Promise.all([
+        getSliders(),
+        getCategories(),
+        getProducts(),
+      ]);
+      await getNotifications();
+      setSliders(sliderData);
+      setCategories(categoryData);
+      setProducts(productData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error.message);
+      setError("Gagal memuat data. Silakan coba lagi nanti.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [sliderData, categoryData, productData] = await Promise.all([
-          getSliders(),
-          getCategories(),
-          getProducts(),
-        ]);
-        console.log("Sliders:", sliderData);
-        console.log("Categories:", categoryData);
-        console.log("Products:", productData);
-        setSliders(sliderData);
-        setCategories(categoryData);
-        setProducts(productData);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-        setError("Gagal memuat data. Silakan coba lagi nanti.");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -122,29 +136,15 @@ export default function HomeScreen() {
     }
   });
 
-const handleAddToCart = async (item: Product): Promise<void> => {
-    try {
-      // Data yang akan dikirim ke axiosInstance
-      const cartData = {
-        product_id: parseInt(item.id.toString()), // Convert back to number for axiosInstance
-        user_id: 1, // TODO: Replace with actual user ID from auth context/storage
-        quantity: 1
-      };
-
-      const response = await axiosInstance.post("/cart", cartData);
-      
-      if (response.status === 200 || response.status === 201) {
-        console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
-        router.push('/keranjang');
-      }
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      console.log("Gagal menambahkan item ke keranjang. Silakan coba lagi.");
-    }
-};
+  const handleAddToCart = (item) => {
+    router.push({
+      pathname: "/keranjang",
+      params: { item: JSON.stringify(item) },
+    });
+  };
 
   const goToNotifications = () => {
-    router.push("/notifications");
+    router.push("/property/notifications");
   };
 
   const goToProductDetail = (id) => {
@@ -154,30 +154,39 @@ const handleAddToCart = async (item: Product): Promise<void> => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text>Loading...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Image
           source={require("@/assets/images/logo.png")}
           style={styles.logo}
+          accessibilityLabel="TNDH Food Logo"
         />
         <Text style={styles.headerTitle}>TNDH Food</Text>
         <TouchableOpacity
           onPress={goToNotifications}
           style={styles.notificationIcon}
+          accessibilityLabel="Buka Notifikasi"
+          accessibilityRole="button"
         >
           <Ionicons name="notifications-outline" size={24} color="#2E5BFF" />
-          <View style={styles.notificationBadge}>
-            <Text style={styles.notificationBadgeText}>3</Text>
-          </View>
+          {notificationCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {notificationCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
+      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons
           name="search"
@@ -189,12 +198,27 @@ const handleAddToCart = async (item: Product): Promise<void> => {
           placeholder="Search"
           style={styles.searchInput}
           value={searchQuery}
-          onChangeText={(text) => setSearchQuery(text)}
+          onChangeText={setSearchQuery}
+          accessibilityLabel="Cari Produk"
         />
       </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {/* Error dan Retry */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchData}
+            accessibilityLabel="Coba Lagi"
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryButtonText}>Coba Lagi</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
+      {/* Slider Terlaris */}
       <Text style={styles.sectionTitle}>Terlaris</Text>
       <ScrollView
         horizontal
@@ -207,7 +231,7 @@ const handleAddToCart = async (item: Product): Promise<void> => {
             <View key={index} style={styles.carouselItem}>
               <Image
                 source={{
-                  uri: `http://192.168.137.63:8000/storage/${
+                  uri: `http://127.0.0.1:8000/storage/${
                     item.image || "placeholder.jpg"
                   }`,
                 }}
@@ -215,7 +239,7 @@ const handleAddToCart = async (item: Product): Promise<void> => {
                 resizeMode="cover"
                 onError={(e) =>
                   console.log(
-                    `Failed to load slider image: http://192.168.137.63:8000/storage/${item.image}`,
+                    `Failed to load slider image: http://127.0.0.1:8000/storage/${item.image}`,
                     e.nativeEvent.error
                   )
                 }
@@ -227,56 +251,48 @@ const handleAddToCart = async (item: Product): Promise<void> => {
         )}
       </ScrollView>
 
+      {/* Filter Kategori */}
       <Text style={styles.sectionTitle}>Kategori Menu</Text>
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedCategory === "All Menu" && styles.activeFilterButton,
-          ]}
-          onPress={() => setSelectedCategory("All Menu")}
-        >
-          <Ionicons
-            name={categoryIcons["All Menu"]}
-            size={20}
-            color={selectedCategory === "All Menu" ? "#FFFFFF" : "#333"}
-          />
-          <Text
-            style={[
-              styles.filterButtonText,
-              selectedCategory === "All Menu" && styles.activeFilterButtonText,
-            ]}
-          >
-            All Menu
-          </Text>
-        </TouchableOpacity>
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.id}
-            style={[
-              styles.filterButton,
-              selectedCategory === category.name && styles.activeFilterButton,
-            ]}
-            onPress={() => setSelectedCategory(category.name)}
-          >
-            <Ionicons
-              name={categoryIcons[category.name] || "fast-food"} // Fallback to "fast-food" if no specific icon
-              size={20}
-              color={selectedCategory === category.name ? "#FFFFFF" : "#333"}
-            />
-            <Text
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScrollContainer}
+      >
+        <View style={styles.filterContainer}>
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category.id}
               style={[
-                styles.filterButtonText,
-                selectedCategory === category.name &&
-                  styles.activeFilterButtonText,
+                styles.filterButton,
+                selectedCategory === category.name && styles.activeFilterButton,
               ]}
+              onPress={() => {
+                console.log("Selected category:", category.name);
+                setSelectedCategory(category.name);
+              }}
+              accessibilityLabel={`Pilih kategori ${category.name}`}
+              accessibilityRole="button"
             >
-              {category.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Ionicons
+                name={category.icon}
+                size={20}
+                color={selectedCategory === category.name ? "#FFFFFF" : "#333"}
+              />
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  selectedCategory === category.name &&
+                    styles.activeFilterButtonText,
+                ]}
+              >
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
 
+      {/* Daftar Produk */}
       <Text style={styles.sectionTitle}>Rekomendasi</Text>
       <FlatList
         data={filteredProducts}
@@ -291,7 +307,7 @@ const handleAddToCart = async (item: Product): Promise<void> => {
           >
             <Image
               source={{
-                uri: `http://192.168.137.63:8000/storage/${
+                uri: `http://127.0.0.1:8000/storage/${
                   item.image || "placeholder.jpg"
                 }`,
               }}
@@ -299,7 +315,7 @@ const handleAddToCart = async (item: Product): Promise<void> => {
               resizeMode="cover"
               onError={(e) =>
                 console.log(
-                  `Failed to load product image: http://192.168.137.63:8000/storage/${item.image}`,
+                  `Failed to load product image: http://127.0.0.1:8000/storage/${item.image}`,
                   e.nativeEvent.error
                 )
               }
@@ -329,6 +345,7 @@ const handleAddToCart = async (item: Product): Promise<void> => {
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -337,17 +354,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
     justifyContent: "space-between",
+    padding: 16,
     backgroundColor: "#FFFFFF",
-    elevation: 2,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
+    elevation: 2,
   },
   logo: {
     width: 40,
     height: 40,
-    marginRight: 10,
+    marginRight: 8,
   },
   headerTitle: {
     fontSize: 26,
@@ -369,7 +386,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   notificationBadgeText: {
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "bold",
   },
@@ -377,10 +394,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F7F9FC",
-    borderRadius: 25,
-    paddingHorizontal: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    margin: 16,
+    marginHorizontal: 16,
+    marginVertical: 12,
     borderWidth: 1,
     borderColor: "#E0E6ED",
     shadowColor: "#2E5BFF",
@@ -390,7 +408,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 8,
     color: "#7E8B9F",
   },
   searchInput: {
@@ -398,34 +416,32 @@ const styles = StyleSheet.create({
     height: 40,
     fontSize: 16,
     color: "#2D3748",
-    paddingVertical: 0,
   },
   sectionTitle: {
     fontSize: 22,
     fontWeight: "bold",
     color: "#2E5BFF",
-    marginLeft: 16,
-    marginTop: 24,
+    marginHorizontal: 16,
+    marginTop: 16,
     marginBottom: 8,
   },
   carouselContainer: {
-    marginTop: 16,
-    marginBottom: 16,
-    marginLeft: 10,
     paddingHorizontal: 16,
+    marginVertical: 12,
   },
   carouselItem: {
-    width: 250,
+    width: Dimensions.get("window").width * 0.95,
     height: 150,
-    marginRight: 10,
+    marginRight: 12,
+    marginLeft: 12,
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E0E6ED",
     shadowColor: "#2E5BFF",
-    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -434,23 +450,37 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 12,
   },
-  filterContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginHorizontal: 12,
+  outOfStockCard: {
+    backgroundColor: "#D3D3D3", // Warna abu-abu
+    opacity: 0.6,
+  },
+  outOfStockText: {
+    color: "red",
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  strikeThrough: {
+    textDecorationLine: "line-through",
+    color: "#999",
+  },
+  filterScrollContainer: {
     marginBottom: 12,
   },
-  filterButton: {
-    marginTop: 16,
-    paddingVertical: 12,
+  filterContainer: {
+    flexDirection: "row",
     paddingHorizontal: 16,
-    marginLeft: 16,
-    borderRadius: 20,
+    paddingVertical: 8,
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E0E6ED",
     backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    alignItems: "center",
   },
   activeFilterButton: {
     backgroundColor: "#2E5BFF",
@@ -466,8 +496,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   categoryList: {
-    paddingLeft: 16,
-    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   categoryCard: {
     flex: 1,
@@ -475,13 +505,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     margin: 8,
     padding: 12,
-    shadowColor: "#2E5BFF",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 5,
     borderWidth: 1,
     borderColor: "#E0E6ED",
+    shadowColor: "#2E5BFF",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
   },
   productImage: {
     width: "100%",
@@ -490,17 +520,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#F7F9FC",
   },
   infoContainer: {
-    marginTop: 10,
+    marginTop: 8,
   },
   category: {
     backgroundColor: "#2E5BFF",
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 12,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     alignSelf: "flex-start",
-    fontWeight: "500",
   },
   name: {
     fontSize: 16,
@@ -530,23 +559,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#2E5BFF",
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 6,
     marginTop: 12,
   },
   cartText: {
-    color: "white",
-    marginRight: 5,
+    color: "#FFFFFF",
+    marginRight: 6,
     fontWeight: "600",
+  },
+  errorContainer: {
+    alignItems: "center",
+    marginVertical: 16,
   },
   errorText: {
     color: "#FF3B30",
     textAlign: "center",
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: "#2E5BFF",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
   emptyText: {
     textAlign: "center",
     color: "#7E8B9F",
-    margin: 16,
+    marginVertical: 16,
+    marginHorizontal: 16,
+  },
+  loadingText: {
+    textAlign: "center",
+    color: "#2E5BFF",
+    fontSize: 16,
+    marginTop: 20,
   },
 });

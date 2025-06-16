@@ -10,17 +10,23 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-interface Product {
-  id: number;
-  name: string;
-  category: string;
-  price: string;
-  old_price?: string;
-  oldPrice?: string;
-  image: string;
-  rating?: number;
-  sold?: number;
-}
+
+// const api = axiosInstance.create({
+//   baseURL: "http://127.0.0.1:8000/api",
+//   headers: {
+//     "Content-Type": "application/json",
+//     Accept: "application/json",
+//   },
+// });
+
+// Helper function untuk memformat angka
+const numberFormat = (value) => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "decimal",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
 
 export default function ProductDetail() {
   const { id } = useLocalSearchParams();
@@ -30,27 +36,49 @@ export default function ProductDetail() {
   const router = useRouter();
 
   useEffect(() => {
+    // Validasi id
+    if (!id) {
+      setError("ID produk tidak valid");
+      setLoading(false);
+      return;
+    }
+
+    console.log("Fetching product with id:", id); // Debug id
     const fetchProduct = async () => {
       try {
         setLoading(true);
-        const response = await axiosInstance.get(`/products/${id}`);
-        const item = response.data.data;
+        // Fetch product details
+        const productResponse = await axiosInstance.get(`/products/${id}`);
+        const item = productResponse.data.data;
 
-        // Format harga
+        // Fetch reviews using filter by product_id
+        const reviewsResponse = await axiosInstance.get("/reviews", {
+          params: { product_id: id },
+        });
+        const reviews = reviewsResponse.data.data || [];
+
+        // Hitung harga baru jika ada diskon
+        const originalPrice = Number(item.price) || 0;
+        const discountPrice = Number(item.discount_price) || 0;
+        const newPrice = originalPrice - discountPrice;
+
         const formattedProduct = {
           ...item,
-          price: item.price
-            ? `Rp. ${Number(item.price).toLocaleString("id-ID")}`
-            : "Rp. 0",
-          oldPrice: item.old_price
-            ? `Rp. ${Number(item.old_price).toLocaleString("id-ID")}`
-            : null,
+          price: originalPrice,
+          oldPrice: item.old_price ? Number(item.old_price) : null,
+          discountPrice: discountPrice,
+          newPrice: newPrice,
+          reviews: reviews.map((review) => ({
+            userName: review.user?.name || "Anonim",
+            rating: review.rating || 0,
+            comment: review.comment || "Tidak ada komentar",
+          })),
         };
 
         setProduct(formattedProduct);
       } catch (error) {
-        console.error("Error fetching product:", error);
-        setError("Gagal memuat detail produk");
+        console.error("Error fetching product or reviews:", error);
+        setError(`Gagal memuat detail produk atau ulasan: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -68,7 +96,7 @@ export default function ProductDetail() {
         quantity: 1
       };
 
-      const response = await axios.post("http://192.168.137.63:8000/axiosInstance/cart", cartData);
+      const response = await axiosInstance.post("/cart", cartData);
       
       if (response.status === 200 || response.status === 201) {
         console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
@@ -92,6 +120,12 @@ export default function ProductDetail() {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => window.location.reload()} // Reload page to retry
+        >
+          <Text style={styles.retryButtonText}>Coba Lagi</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -104,6 +138,16 @@ export default function ProductDetail() {
     );
   }
 
+  // Logika untuk handleAddToCart (mirip dengan HomeScreen)
+  const handleAddToCart = (item) => {
+    if (item.stock_status === "available") {
+      router.push({
+        pathname: "/keranjang",
+        params: { item: JSON.stringify(item) },
+      });
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -111,51 +155,87 @@ export default function ProductDetail() {
           <Ionicons name="arrow-back" size={24} color="#2E5BFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detail Produk</Text>
-        <View style={{ width: 24 }} /> {/* Untuk alignment */}
+        <View style={{ width: 24 }} />
       </View>
 
       <Image
         source={{
-          uri: `http://192.168.137.63:8000/storage/${
-            product.image || "placeholder.jpg"
-          }`,
+          uri: product.image
+            ? `http://127.0.0.1:8000/storage/${product.image}`
+            : "http://127.0.0.1:8000/storage/placeholder.jpg",
         }}
         style={styles.productImage}
         resizeMode="cover"
+        accessibilityLabel={`Gambar ${product.name}`}
       />
 
-      <View style={styles.content}>
+      <View style={styles.infoContainer}>
+        <Text style={styles.category}>
+          {product.category || "Tidak ada kategori"}
+        </Text>
         <Text style={styles.name}>{product.name}</Text>
-        <Text style={styles.category}>{product.category}</Text>
+        <Text style={styles.rating}>
+          ⭐ {product.rating || "N/A"} {product.sold || "0 terjual"}
+        </Text>
 
         <View style={styles.priceContainer}>
-          {product.oldPrice && (
-            <Text style={styles.oldPrice}>{product.oldPrice}</Text>
+          {product.discountPrice > 0 ? (
+            <>
+              <Text style={[styles.oldPrice, styles.strikeThrough]}>
+                Rp {numberFormat(product.price)}
+              </Text>
+              <Text style={styles.price}>
+                Rp {numberFormat(product.newPrice)}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.price}>Rp {numberFormat(product.price)}</Text>
           )}
-          <Text style={styles.price}>{product.price}</Text>
         </View>
 
-        <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={16} color="#FFD700" />
-          <Text style={styles.ratingText}>
-            {product.rating || "N/A"} | {product.sold || "0"} terjual
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Deskripsi</Text>
-          <Text style={styles.description}>
-            {product.description || "Tidak ada deskripsi"}
-          </Text>
-        </View>
+        {product.stock_status === "out_of_stock" && (
+          <Text style={styles.outOfStockText}>Habis</Text>
+        )}
 
         <TouchableOpacity
           style={styles.cartButton}
-          onPress={() => handleAddToCart(product)}
+          onPress={() =>
+            product.stock_status === "available"
+              ? handleAddToCart(product)
+              : null
+          }
+          accessibilityLabel={`Tambah ${product.name} ke keranjang`}
+          accessibilityRole="button"
+          disabled={product.stock_status === "out_of_stock"}
         >
-          <Text style={styles.cartText}>Tambah ke Keranjang</Text>
-          <Ionicons name="cart-outline" size={20} color="white" />
+          <Text style={styles.cartText}>Add to cart</Text>
+          <Ionicons name="cart-outline" size={16} color="white" />
         </TouchableOpacity>
+      </View>
+
+      {/* Bagian Ulasan tetap dipertahankan */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Ulasan Pelanggan</Text>
+        {product.reviews && product.reviews.length > 0 ? (
+          product.reviews.map((review, index) => (
+            <View key={index} style={styles.reviewContainer}>
+              <Text style={styles.reviewUser}>{review.userName}</Text>
+              <View style={styles.reviewRating}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Ionicons
+                    key={i}
+                    name={i < review.rating ? "star" : "star-outline"}
+                    size={16}
+                    color="#FFD700"
+                  />
+                ))}
+              </View>
+              <Text style={styles.reviewComment}>{review.comment}</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.description}>Belum ada ulasan</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -183,54 +263,72 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 300,
   },
-  content: {
+  infoContainer: {
     padding: 16,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#2D3748",
-    marginBottom: 8,
   },
   category: {
     backgroundColor: "#2E5BFF",
-    color: "white",
-    fontSize: 14,
+    color: "#FFFFFF",
+    fontSize: 12,
     paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     borderRadius: 6,
     alignSelf: "flex-start",
-    fontWeight: "500",
-    marginBottom: 16,
+    marginBottom: 6,
+  },
+  name: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2D3748",
+    marginBottom: 6,
+  },
+  rating: {
+    fontSize: 12,
+    color: "#7E8B9F",
+    marginBottom: 6,
   },
   priceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 6,
   },
   price: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#2E5BFF",
   },
   oldPrice: {
-    fontSize: 16,
+    fontSize: 12,
     color: "#A0AEC0",
+  },
+  strikeThrough: {
     textDecorationLine: "line-through",
     marginRight: 8,
   },
-  ratingContainer: {
+  outOfStockText: {
+    color: "red",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  cartButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    justifyContent: "center",
+    backgroundColor: "#2E5BFF",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 6,
   },
-  ratingText: {
-    fontSize: 14,
-    color: "#7E8B9F",
-    marginLeft: 4,
+  cartText: {
+    color: "#FFFFFF",
+    marginRight: 6,
+    fontWeight: "600",
   },
   section: {
     marginBottom: 24,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -243,24 +341,42 @@ const styles = StyleSheet.create({
     color: "#4A5568",
     lineHeight: 22,
   },
-  cartButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2E5BFF",
-    padding: 16,
+  reviewContainer: {
+    marginBottom: 16,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#E0E6ED",
     borderRadius: 8,
-    marginTop: 16,
   },
-  cartText: {
-    color: "white",
+  reviewUser: {
     fontSize: 16,
-    fontWeight: "600",
-    marginRight: 8,
+    fontWeight: "bold",
+    color: "#2D3748",
+    marginBottom: 4,
+  },
+  reviewRating: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: "#4A5568",
   },
   errorText: {
     color: "#FF3B30",
     textAlign: "center",
     margin: 16,
+  },
+  retryButton: {
+    backgroundColor: "#2E5BFF",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    marginTop: 10,
+    alignSelf: "center",
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });
