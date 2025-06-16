@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+// Konfigurasi axios
 const api = axios.create({
   baseURL: "http://127.0.0.1:8000/api",
   headers: {
@@ -18,6 +19,24 @@ const api = axios.create({
     Accept: "application/json",
   },
 });
+
+// Helper function untuk menentukan icon berdasarkan nama kategori
+const getCategoryIcon = (categoryName) => {
+  const iconMap = {
+    "all menu": "list",
+    makanan: "fast-food",
+    minuman: "water",
+    cemilan: "pizza",
+    snack: "cafe",
+    dessert: "ice-cream",
+    "makanan berat": "restaurant",
+    kue: "cake",
+    kopi: "cafe",
+    teh: "cafe",
+    jus: "water",
+  };
+  return iconMap[categoryName?.toLowerCase() || ""] || "fast-food";
+};
 
 // Helper function untuk memformat angka
 const numberFormat = (value) => {
@@ -36,28 +55,39 @@ export default function ProductDetail() {
   const router = useRouter();
 
   useEffect(() => {
-    // Validasi id
     if (!id) {
       setError("ID produk tidak valid");
       setLoading(false);
       return;
     }
 
-    console.log("Fetching product with id:", id); // Debug id
+    console.log("Fetching product with id:", id);
     const fetchProduct = async () => {
       try {
         setLoading(true);
-        // Fetch product details
         const productResponse = await api.get(`/products/${id}`);
+        console.log("Product API Response:", productResponse.data);
         const item = productResponse.data.data;
 
-        // Fetch reviews using filter by product_id
+        // Fetch category name if id_category exists
+        let categoryName = item.category;
+        if (!categoryName && item.id_category) {
+          const categoriesResponse = await api.get("/categories");
+          const categoryMap = categoriesResponse.data.data.reduce(
+            (map, cat) => {
+              map[cat.id_category] = cat.name_category;
+              return map;
+            },
+            {}
+          );
+          categoryName = categoryMap[item.id_category] || "Tidak ada kategori";
+        }
+
         const reviewsResponse = await api.get("/reviews", {
-          params: { product_id: id },
+          params: { product_id: id, is_approved: 1 },
         });
         const reviews = reviewsResponse.data.data || [];
 
-        // Hitung harga baru jika ada diskon
         const originalPrice = Number(item.price) || 0;
         const discountPrice = Number(item.discount_price) || 0;
         const newPrice = originalPrice - discountPrice;
@@ -73,6 +103,9 @@ export default function ProductDetail() {
             rating: review.rating || 0,
             comment: review.comment || "Tidak ada komentar",
           })),
+          categoryIcon: getCategoryIcon(categoryName),
+          category: categoryName,
+          description: item.description || "Tidak ada deskripsi", // Tambahkan deskripsi
         };
 
         setProduct(formattedProduct);
@@ -101,7 +134,7 @@ export default function ProductDetail() {
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={() => window.location.reload()} // Reload page to retry
+          onPress={() => router.push("/")}
         >
           <Text style={styles.retryButtonText}>Coba Lagi</Text>
         </TouchableOpacity>
@@ -117,7 +150,6 @@ export default function ProductDetail() {
     );
   }
 
-  // Logika untuk handleAddToCart (mirip dengan HomeScreen)
   const handleAddToCart = (item) => {
     if (item.stock_status === "available") {
       router.push({
@@ -150,12 +182,11 @@ export default function ProductDetail() {
 
       <View style={styles.infoContainer}>
         <Text style={styles.category}>
+          <Ionicons name={product.categoryIcon} size={12} color="#FFFFFF" />{" "}
           {product.category || "Tidak ada kategori"}
         </Text>
         <Text style={styles.name}>{product.name}</Text>
-        <Text style={styles.rating}>
-          ⭐ {product.rating || "N/A"} {product.sold || "0 terjual"}
-        </Text>
+        <Text style={styles.rating}>⭐ {product.rating || "N/A"}</Text>
 
         <View style={styles.priceContainer}>
           {product.discountPrice > 0 ? (
@@ -171,6 +202,9 @@ export default function ProductDetail() {
             <Text style={styles.price}>Rp {numberFormat(product.price)}</Text>
           )}
         </View>
+
+        {/* Tambahkan deskripsi produk di bawah harga */}
+        <Text style={styles.description}>{product.description}</Text>
 
         {product.stock_status === "out_of_stock" && (
           <Text style={styles.outOfStockText}>Habis</Text>
@@ -192,7 +226,6 @@ export default function ProductDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* Bagian Ulasan tetap dipertahankan */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ulasan Pelanggan</Text>
         {product.reviews && product.reviews.length > 0 ? (
@@ -254,6 +287,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignSelf: "flex-start",
     marginBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
   },
   name: {
     fontSize: 16,
@@ -319,6 +354,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#4A5568",
     lineHeight: 22,
+    marginBottom: 6,
   },
   reviewContainer: {
     marginBottom: 16,

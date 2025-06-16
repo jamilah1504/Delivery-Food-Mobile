@@ -121,7 +121,10 @@ const getProducts = async () => {
         : []) || []
     );
   } catch (error) {
-    console.error("Error fetching products:", error.message);
+    console.error(
+      "Error fetching products:",
+      error.response?.data || error.message
+    );
     return [];
   }
 };
@@ -411,9 +414,7 @@ export default function HomeScreen() {
                   {item.category || "Tidak ada kategori"}
                 </Text>
                 <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.rating}>
-                  ⭐ {item.rating || "N/A"} {item.sold || "0 terjual"}
-                </Text>
+                <Text style={styles.rating}>⭐ {item.rating || "N/A"}</Text>
                 {/* Kondisi 3 & 4: Tampilkan harga */}
                 {discountPrice > 0 ? (
                   <>
