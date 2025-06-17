@@ -58,20 +58,13 @@ export default function AppLayout() {
             }}
           />
           <Tabs.Screen
-            name="wishlist"
+            name="index"
             options={{
-              title: "Wishlist",
-              tabBarIcon: ({ focused }) => (
-                <AntDesign
-                  name="hearto"
-                  size={24}
-                  color={focused ? "#2E5BFF" : "#999"}
-                />
-              ),
+              href: null, // Gunakan href: null di dalam options
             }}
           />
           <Tabs.Screen
-            name="index"
+            name="home"
             options={{
               title: "Home",
               tabBarIcon: ({ focused }) => (

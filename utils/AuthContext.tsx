@@ -1,154 +1,160 @@
-import { createContext, useState, useEffect, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import api from "@/utils/axiosInstance"; // Use your configured axios instance
+// src/context/AuthContext.tsx
 
-// Define proper User interface
-interface User {
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useContext,
+  useCallback,
+} from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient, { injectLogout } from './axiosInstance';
+
+// ===================================================================
+// TIPE DATA
+// ===================================================================
+
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+}
+
+export interface User {
   id: number;
   name: string;
   email: string;
-  role?: string;
-  [key: string]: any; // Allow for additional properties
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  role: UserRole;
+  phone_number?: string;
+  profile_photo_url?: string;
 }
 
-interface AuthContextProps {
-  token: string | null;
+interface AuthResponse {
+  data: {
+    user: User;
+    token: string;
+  };
+}
+
+// Peningkatan 1: Tipe Context yang lebih kaya
+interface AuthContextType {
   user: User | null;
-  login: (token: string, user: User) => void;
-  logout: () => void;
-  loading: boolean;
-  isAuthenticated: boolean;
+  /** `true` saat proses login/register sedang berjalan. */
+  isAuthLoading: boolean;
+  /** `true` saat sesi sedang divalidasi saat app start. */
+  isSessionLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  /** Fungsi untuk memeriksa peran pengguna. */
+  hasRole: (role: UserRole | UserRole[]) => boolean;
 }
 
-export const AuthContext = createContext<AuthContextProps>({
-  token: null,
-  user: null,
-  login: () => {},
-  logout: () => {},
-  loading: true,
-  isAuthenticated: false,
-});
+// ===================================================================
+// KODE KONTEKS OTENTIKASI
+// ===================================================================
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(null);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isAuthLoading, setAuthLoading] = useState<boolean>(false);
+  const [isSessionLoading, setSessionLoading] = useState<boolean>(true);
 
-  // Initialize authentication state
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        setLoading(true);
-        
-        // Get stored token and user data
-        const [storedToken, storedUserData] = await Promise.all([
-          AsyncStorage.getItem("token"),
-          AsyncStorage.getItem("user")
-        ]);
-
-        if (storedToken && storedUserData) {
-          try {
-            const parsedUser = JSON.parse(storedUserData);
-            
-            // Set axios authorization header
-            api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-            
-            // Optional: Verify token with API
-            try {
-              const response = await api.get("/auth/me"); // or your user profile endpoint
-              setUser(response.data.user || response.data);
-              setToken(storedToken);
-            } catch (apiError) {
-              console.log("Token verification failed, using stored user data");
-              // If API call fails, use stored user data (token might still be valid)
-              setUser(parsedUser);
-              setToken(storedToken);
-            }
-          } catch (parseError) {
-            console.error("Failed to parse stored user data:", parseError);
-            // Clear corrupted data
-            await AsyncStorage.multiRemove(["token", "user"]);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to initialize auth:", error);
-        // Clear potentially corrupted data
-        await AsyncStorage.multiRemove(["token", "user"]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
+  // Fungsi `logout` yang dimemoize
+  const logout = useCallback(async (): Promise<void> => {
+    console.log("Menjalankan fungsi logout...");
+    setUser(null);
+    await AsyncStorage.multiRemove(['userToken', 'userData']);
   }, []);
 
-  // Update axios header when token changes
+  // useEffect utama, hanya berjalan sekali
   useEffect(() => {
-    if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    } else {
-      delete api.defaults.headers.common["Authorization"];
-    }
-  }, [token]);
+    injectLogout(logout);
 
-  const login = async (newToken: string, newUser: User) => {
+    // Peningkatan 2: Validasi sesi ke backend
+    const validateSession = async () => {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        setSessionLoading(false);
+        return;
+      }
+      
+      try {
+        // Lakukan request ke endpoint yang dilindungi untuk memvalidasi token
+        const response = await apiClient.get<{ user: User }>('/user'); // Asumsi endpoint `/api/user` ada
+        // Jika berhasil, user dari respons adalah data ter-update
+        const latestUser = response.data.user; 
+        setUser(latestUser);
+        // Perbarui data user di storage jika perlu
+        await AsyncStorage.setItem('userData', JSON.stringify(latestUser));
+      } catch (error) {
+        console.log('Validasi token gagal, sesi tidak valid.', error);
+        await logout(); // Jika token tidak valid, hapus sesi
+      } finally {
+        setSessionLoading(false);
+      }
+    };
+    
+    validateSession();
+  }, [logout]);
+
+  const handleAuthSuccess = async (userData: User, userToken: string): Promise<void> => {
+    setUser(userData);
+    await AsyncStorage.setItem('userToken', userToken);
+    await AsyncStorage.setItem('userData', JSON.stringify(userData));
+  };
+
+  const login = useCallback(async (email: string, password: string): Promise<void> => {
+    setAuthLoading(true);
     try {
-      // Store in AsyncStorage
-      await Promise.all([
-        AsyncStorage.setItem("token", newToken),
-        AsyncStorage.setItem("user", JSON.stringify(newUser))
-      ]);
-
-      // Update state
-      setToken(newToken);
-      setUser(newUser);
-      
-      // Set axios authorization header
-      api.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
-      
-      console.log("Login successful, user authenticated");
-    } catch (error) {
-      console.error("Failed to store auth data:", error);
-      throw new Error("Failed to save login information");
+      const response = await apiClient.post<AuthResponse>('/login', { email, password });
+      await handleAuthSuccess(response.data.data.user, response.data.data.token);
+    } catch (e: any) {
+      throw new Error(e.response?.data?.message || 'Login gagal.');
+    } finally {
+      setAuthLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const register = useCallback(async (name: string, email: string, password: string): Promise<void> => {
+    setAuthLoading(true);
     try {
-      // Clear AsyncStorage
-      await AsyncStorage.multiRemove(["token", "user"]);
-      
-      // Clear state
-      setToken(null);
-      setUser(null);
-      
-      // Remove axios authorization header
-      delete api.defaults.headers.common["Authorization"];
-      
-      console.log("Logout successful");
-    } catch (error) {
-      console.error("Failed to clear auth data:", error);
-      // Still clear state even if AsyncStorage fails
-      setToken(null);
-      setUser(null);
-      delete api.defaults.headers.common["Authorization"];
+      const response = await apiClient.post<AuthResponse>('/register', { name, email, password });
+      await handleAuthSuccess(response.data.data.user, response.data.data.token);
+    } catch (e: any) {
+      throw new Error(e.response?.data?.message || 'Registrasi gagal.');
+    } finally {
+      setAuthLoading(false);
     }
-  };
+  }, []);
 
-  const isAuthenticated = Boolean(token && user);
-
-  const contextValue: AuthContextProps = {
-    token,
-    user,
-    login,
-    logout,
-    loading,
-    isAuthenticated,
-  };
+  // Peningkatan 3: Fungsi helper untuk RBAC (Role-Based Access Control)
+  const hasRole = useCallback((requiredRole: UserRole | UserRole[]): boolean => {
+    if (!user) {
+      return false;
+    }
+    if (Array.isArray(requiredRole)) {
+      return requiredRole.includes(user.role);
+    }
+    return user.role === requiredRole;
+  }, [user]);
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={{ login, logout, register, user, isAuthLoading, isSessionLoading, hasRole }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Custom hook untuk menggunakan context
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

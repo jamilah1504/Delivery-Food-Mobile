@@ -1,9 +1,59 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router"; // Ganti useNavigation() dengan useRouter()
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
+
+// Asumsikan Anda memiliki instance axios yang sudah dikonfigurasi
+// dan context untuk autentikasi
+import axiosInstance from "../../utils/axiosInstance"; 
+import { useAuth } from "../../utils/AuthContext";
 
 export default function ProfileScreen() {
   const router = useRouter(); // Gunakan router dari expo-router
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      // 1. Panggil API untuk logout dari server
+      // Endpoint '/api/logout' adalah umum untuk Laravel, sesuaikan jika perlu
+      await axiosInstance.post('/logout');
+
+      // 2. Hapus token dari AsyncStorage di sisi klien
+      // Pastikan key 'userToken' sama dengan yang Anda gunakan saat login
+      await AsyncStorage.removeItem('userToken');
+      
+      // 3. Update state global (opsional, tapi sangat direkomendasikan)
+      logout(); // Mereset state user menjadi null
+      
+      // 4. Arahkan pengguna ke halaman sign-in
+      // `replace` digunakan agar pengguna tidak bisa kembali ke halaman sebelumnya
+      router.replace('./sign-in');
+
+    } catch (error) {
+      console.error("Logout failed:", error);
+      Alert.alert("Error", "Gagal untuk logout, silakan coba lagi.");
+    }
+  };
+
+  const confirmLogout = () => {
+    Alert.alert(
+      "Konfirmasi Logout",
+      "Apakah Anda yakin ingin keluar?",
+      [
+        {
+          text: "Batal",
+          style: "cancel",
+        },
+        {
+          text: "Ya, Keluar",
+          onPress: handleLogout, // Panggil fungsi logout jika pengguna setuju
+          style: "destructive",
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <View style={styles.container}>

@@ -139,14 +139,14 @@ export default function ProductDetail() {
   }
 
   // Logika untuk handleAddToCart (mirip dengan HomeScreen)
-  const handleAddToCart = (item) => {
-    if (item.stock_status === "available") {
-      router.push({
-        pathname: "/keranjang",
-        params: { item: JSON.stringify(item) },
-      });
-    }
-  };
+  // const handleAddToCart = (item) => {
+  //   if (item.stock_status === "available") {
+  //     router.push({
+  //       pathname: "/keranjang",
+  //       params: { item: JSON.stringify(item) },
+  //     });
+  //   }
+  // };
 
   return (
     <ScrollView style={styles.container}>

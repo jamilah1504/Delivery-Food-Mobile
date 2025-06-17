@@ -189,27 +189,38 @@ export default function Keranjang() {
     );
   };
 
-  // Helper function to safely parse price
-  const parsePrice = (priceString: string | null | undefined): number => {
-    if (!priceString || typeof priceString !== 'string') {
-      return 0;
-    }
-    
-    try {
-      // Remove "Rp. " prefix and dots, then convert to number
-      const cleanPrice = priceString.replace(/^Rp\.?\s*/, "").replace(/\./g, "").replace(/,/g, "");
-      const numericPrice = parseFloat(cleanPrice);
-      return isNaN(numericPrice) ? 0 : numericPrice;
-    } catch (error) {
-      console.error("Error parsing price:", priceString, error);
-      return 0;
-    }
-  };
+  const parsePrice = (priceValue: string | number | null | undefined): number => {
+  // Tetap amankan dari nilai null/undefined
+  if (priceValue === null || priceValue === undefined || priceValue === '') {
+    return 0;
+  }
+
+  // Jika sudah berupa angka, langsung kembalikan
+  if (typeof priceValue === 'number') {
+    return priceValue;
+  }
+
+  // Hapus semua karakter yang BUKAN digit atau titik.
+  // Ini akan melindungi dari "Rp", spasi, dll. tapi mempertahankan "20000.00"
+  const cleanedString = priceValue.replace(/[^0-9.]/g, '');
+
+  // Gunakan parseFloat untuk membaca angka desimal.
+  const price = parseFloat(cleanedString);
+
+  // Fallback jika hasilnya NaN
+  return isNaN(price) ? 0 : price;
+};
 
   // Hitung total harga dengan error handling
-  const totalAmount = cartItems.reduce((sum, item) => {
+  const totalAmount: number = cartItems.reduce((sum, item) => {
+    // TypeScript tahu `sum` adalah number dan `item` adalah CartItem.
+    // `?.` (Optional Chaining) sangat berguna di sini dan didukung penuh.
     const price = parsePrice(item.product?.price);
-    return sum + (price * item.quantity);
+    
+    // Pastikan kuantitas juga merupakan angka yang valid.
+    const quantity = Number(item.quantity) || 0;
+
+    return sum + (price * quantity);
   }, 0);
 
   const handleCheckout = () => {

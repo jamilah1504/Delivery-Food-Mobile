@@ -3,196 +3,179 @@ import { ThemedTextInput } from "@/components/ThemedTextInput";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Alert, Image, ScrollView, useWindowDimensions } from "react-native";
+import React, { useState } from "react";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  useWindowDimensions,
+  ActivityIndicator,
+} from "react-native";
 import { ms, ScaledSheet } from "react-native-size-matters";
 import { ThemedText } from "../../components/ThemedText";
 import { ThemedView } from "../../components/ThemedView";
-import { useSession } from "../../store/auth/auth-context";
+
+// 1. Import axiosInstance dan AsyncStorage secara langsung
+import axiosInstance from "../../utils/axiosInstance"; // Sesuaikan path
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { User, UserRole } from "../../utils/AuthContext"; // Asumsi tipe ada di context
+
+import axios from 'axios';
+
+// Tipe untuk response API
+interface AuthResponse {
+  data: {
+    user: User;
+    token: string;
+  };
+}
 
 export default function SignIn() {
-  const { signIn, error, isLoading, session } = useSession();
+  // 2. Gunakan state loading lokal, bukan dari context
+  const [isLoading, setIsLoading] = useState(false);
   const { height: windowHeight, width } = useWindowDimensions();
+
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
 
   const [errors, setErrors] = useState({
     email: "",
     password: "",
   });
 
-  const [errorIndicator, setErrorIndicator] = useState({
-    email: false,
-    password: false,
-  });
+  const [isPasswordVisible, setPasswordVisible] = useState(false);
 
-  const [inputValue, setInputValue] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [canSubmit, setCanSubmit] = useState(false);
-  const [securePasswordEntry, setSecurePasswordEntry] = useState(true);
-
-  const styles = ScaledSheet.create({
-    wrapper: {
-      alignItems: "center",
-      flex: 1,
-      justifyContent: "center",
-      minHeight: windowHeight,
-      width,
-    },
-    inputContainer: {
-      flex: 1,
-      justifyContent: "center",
-      gap: "15@ms",
-      width: "80%",
-    },
-    logo: {
-      width: "80%", // Sesuaikan ukuran logo
-      height: undefined,
-      resizeMode: "contain",
-      alignSelf: "center",
-      marginBottom: 20,
-    },
-  });
-
-  type InputValueKey = keyof typeof inputValue;
-
-  const placeholders: Record<InputValueKey, string> = {
-    email: "Email Address",
-    password: "Password",
+  const handleInputChange = (name: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   };
 
-  const validateInput = (key: InputValueKey) => {
-    let hasError = false;
-    const value = inputValue[key];
-
-    const regex = {
-      email: /^[\w.%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
-    };
-
-    switch (key) {
-      case "email":
-        hasError = !regex.email.test(value);
-        setErrors((prev) => ({
-          ...prev,
-          email: hasError ? "Invalid email" : "",
-        }));
-        break;
-      case "password":
-        hasError = value.length < 8;
-        setErrors((prev) => ({
-          ...prev,
-          password: hasError ? "Password must be at least 8 characters" : "",
-        }));
-        break;
-    }
-
-    setErrorIndicator((prev) => ({ ...prev, [key]: hasError }));
-    return hasError;
-  };
-
-  useEffect(() => {
-    const isValid =
-      Object.values(errors).every((error) => error === "") &&
-      Object.values(inputValue).every((value) => value !== "");
-    setCanSubmit(isValid);
-  }, [errors, inputValue]);
-
-  useEffect(() => {
-    if (session) {
-      console.log("Redirecting to /");
-      router.replace("/");
-    }
-  }, [session]);
-
-  const handleSubmit = async () => {
+  const validate = () => {
     let isValid = true;
-    Object.keys(inputValue).forEach((key) => {
-      if (validateInput(key as InputValueKey)) isValid = false;
-    });
+    const newErrors = { email: "", password: "" };
+    const emailRegex = /^[\w.%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
-    if (!isValid) return;
+    if (!form.email || !emailRegex.test(form.email)) {
+      newErrors.email = "Format email tidak valid.";
+      isValid = false;
+    }
 
+    if (!form.password || form.password.length < 8) {
+      newErrors.password = "Password minimal 8 karakter.";
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  // 3. Fungsi handleSubmit diubah untuk memanggil axiosInstance
+  const handleSubmit = async () => {
+    if (!validate()) {
+      return;
+    }
+
+    console.log('[SignIn Component] Mencoba login dengan data:', form);
+
+    setIsLoading(true); // Mulai loading
     try {
-      await signIn(inputValue.email, inputValue.password);
-      Alert.alert("Success", "Logged in successfully!");
-      router.replace("/");
-    } catch (err) {
-      Alert.alert("Login Failed", error || "Invalid email or password");
+      // Panggil axiosInstance secara langsung
+      const response = await axios.post<AuthResponse>(
+        `http://127.0.0.1:8000/api/login`,
+        {
+          email: form.email,
+          password: form.password,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        }
+      );
+
+
+      const { user, token } = response.data.data;
+
+      // Simpan token dan data user secara manual ke AsyncStorage
+      await AsyncStorage.setItem('userToken', token);
+      await AsyncStorage.setItem('userData', JSON.stringify(user));
+
+      // Tampilkan alert sukses dan navigasi secara manual
+      Alert.alert("Login Berhasil", `Selamat datang, ${user.name}!`);
+      router.replace("/home"); // Arahkan ke halaman utama
+
+    } catch (error: any) {
+      // Tangkap error langsung dari axios
+      Alert.alert(
+        "Login Gagal",
+        error.response?.data?.message || "Email atau password salah."
+      );
+    } finally {
+      setIsLoading(false); // Selesai loading
     }
   };
 
+  // ... (Sisa kode JSX tetap sama persis)
   return (
-    <ScrollView>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       <ThemedView style={styles.wrapper}>
         <ThemedView style={styles.inputContainer}>
           <Image
             source={require("@/assets/images/logo.png")}
             style={styles.logo}
           />
-
-          <ThemedText
-            style={{ textAlign: "center", marginBottom: 20 }}
-            type="title"
-          >
+          <ThemedText style={styles.title} type="title">
             TNDH Company
           </ThemedText>
 
-          {Object.keys(inputValue).map((field, index) => (
-            <ThemedTextInput
-              key={index}
-              placeholder={placeholders[field as InputValueKey]}
-              value={inputValue[field as InputValueKey]}
-              onChangeText={(text: string) =>
-                setInputValue((prev) => ({ ...prev, [field]: text }))
-              }
-              onBlur={() => validateInput(field as InputValueKey)}
-              validationError={errorIndicator[field as InputValueKey]}
-              validationErrorMessage={errors[field as InputValueKey]}
-              secureTextEntry={
-                field === "password" ? securePasswordEntry : false
-              }
-              icon={
-                field === "password" ? (
-                  securePasswordEntry ? (
-                    <AntDesign
-                      name="eyeo"
-                      onPress={() =>
-                        setSecurePasswordEntry(!securePasswordEntry)
-                      }
-                      size={ms(24)}
-                    />
-                  ) : (
-                    <Feather
-                      name="eye-off"
-                      onPress={() =>
-                        setSecurePasswordEntry(!securePasswordEntry)
-                      }
-                      size={ms(24)}
-                    />
-                  )
-                ) : undefined
-              }
-            />
-          ))}
+          <ThemedTextInput
+            placeholder="Alamat Email"
+            value={form.email}
+            onChangeText={(text) => handleInputChange("email", text)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            validationError={!!errors.email}
+            validationErrorMessage={errors.email}
+          />
+
+          <ThemedTextInput
+            placeholder="Password"
+            value={form.password}
+            onChangeText={(text) => handleInputChange("password", text)}
+            secureTextEntry={!isPasswordVisible}
+            validationError={!!errors.password}
+            validationErrorMessage={errors.password}
+            icon={
+              <ThemedPressable onPress={() => setPasswordVisible((prev) => !prev)}>
+                {isPasswordVisible ? (
+                  <Feather name="eye-off" size={ms(22)} />
+                ) : (
+                  <AntDesign name="eyeo" size={ms(22)} />
+                )}
+              </ThemedPressable>
+            }
+          />
 
           <ThemedPressable
-            disabled={!canSubmit || isLoading}
+            disabled={isLoading}
             onPress={handleSubmit}
-            style={!canSubmit && { backgroundColor: "#ccc" }}
+            style={isLoading ? styles.buttonDisabled : {}}
           >
-            <ThemedText>{isLoading ? "Logging In..." : "Login"}</ThemedText>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <ThemedText>Login</ThemedText>
+            )}
           </ThemedPressable>
 
-          {error && (
-            <ThemedText style={{ color: "red", textAlign: "center" }}>
-              {error}
-            </ThemedText>
-          )}
-
           <ThemedText
-            onPress={() => router.push("./sign-up")}
-            style={{ color: "#4CAF50", textAlign: "center" }}
+            onPress={() => router.push("/auth/sign-up")} // Diperbaiki di sini
+            style={styles.linkText}
             type="link"
           >
             Belum punya akun? Daftar
@@ -202,3 +185,39 @@ export default function SignIn() {
     </ScrollView>
   );
 }
+
+// ... (Kode styles tetap sama persis)
+const styles = ScaledSheet.create({
+    wrapper: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: "20@ms",
+    },
+    inputContainer: {
+      flex: 1,
+      justifyContent: "center",
+      gap: "15@ms",
+      width: "85%",
+      maxWidth: 400,
+    },
+    logo: {
+      width: "70%",
+      aspectRatio: 3 / 1,
+      resizeMode: "contain",
+      alignSelf: "center",
+      marginBottom: "10@ms",
+    },
+    title: {
+      textAlign: "center",
+      marginBottom: "20@ms",
+    },
+    buttonDisabled: {
+      backgroundColor: "#ccc",
+    },
+    linkText: {
+      color: "#4CAF50",
+      textAlign: "center",
+      marginTop: "10@ms",
+    },
+  });

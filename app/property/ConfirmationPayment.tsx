@@ -209,32 +209,48 @@ export default function ConfirmationScreen() {
     const { url } = newNavState;
     if (!url) return;
 
+    const getUrlParams = (url) => {
+      const params = {};
+      const regex = /[?&]([^=#]+)=([^&#]*)/g;
+      let match;
+      while ((match = regex.exec(url))) {
+        params[match[1]] = decodeURIComponent(match[2]);
+      }
+      return params;
+    };
+
     const params = getUrlParams(url);
     const orderId = params.order_id;
     const transactionStatus = params.transaction_status;
-    
-    // Jika transaksi berhasil
+
+    // Jika transaksi berhasil, arahkan ke halaman review dengan orderId
     if (orderId && (transactionStatus === 'capture' || transactionStatus === 'settlement')) {
-        setShowWebView(false);
-        updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
-        Alert.alert("Sukses", "Pembayaran Anda telah berhasil diproses.", [
-            { text: "OK", onPress: () => router.replace('/') }
-        ]);
-    } 
+      setShowWebView(false);
+      updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
+      Alert.alert("Sukses", "Pembayaran Anda telah berhasil diproses.", [
+        {
+          text: "OK",
+          // Mengarahkan ke halaman review dengan menyertakan orderId
+          onPress: () => router.replace(`/property/review?orderId=${orderId}`)
+        }
+      ]);
+    }
     // Jika transaksi pending
     else if (orderId && transactionStatus === 'pending') {
-        setShowWebView(false);
-        updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
-        Alert.alert("Tertunda", "Pembayaran Anda sedang menunggu penyelesaian.", [
-            { text: "OK", onPress: () => router.replace('/') }
-        ]);
-    } 
+      setShowWebView(false);
+      updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
+      Alert.alert("Tertunda", "Pembayaran Anda sedang menunggu penyelesaian.", [
+        { text: "OK", onPress: () => router.replace('/') }
+      ]);
+    }
     // Jika webview ditutup atau transaksi gagal/dibatalkan
     else if (url.includes('/close') || (orderId && (transactionStatus === 'deny' || transactionStatus === 'expire' || transactionStatus === 'cancel'))) {
-        setShowWebView(false);
-        if (orderId) {
-          updateOrderStatus(orderId, transactionStatus || 'cancelled'); // Panggil fungsi update
-        }
+      setShowWebView(false);
+      if (orderId) {
+        updateOrderStatus(orderId, transactionStatus || 'cancelled'); // Panggil fungsi update
+      }
+      // Opsional: Anda bisa arahkan ke halaman lain jika diperlukan saat gagal/tutup
+      // router.replace('/'); 
     }
   };
 

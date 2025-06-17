@@ -4,6 +4,9 @@ import { ms, ScaledSheet } from "react-native-size-matters";
 import { router } from "expo-router";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
+
+import axiosInstance from "../../utils/axiosInstance"; 
+
 import { ThemedPressable } from "@/components/ThemedPressable";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedTextInput } from "@/components/ThemedTextInput";
@@ -11,8 +14,11 @@ import { ThemedView } from "@/components/ThemedView";
 import { useSession } from "@/store/auth/auth-context";
 
 export default function SignUp() {
-  const { signUp, error, isLoading, session } = useSession();
+  const { session } = useSession();
   const { height: windowHeight, width } = useWindowDimensions();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState("");
 
   const [errors, setErrors] = useState({
     email: "",
@@ -49,52 +55,52 @@ export default function SignUp() {
     inputContainer: {
       flex: 1,
       justifyContent: "center",
-      gap: "10@ms", // Reduced gap between inputs
+      gap: "10@ms",
       width: "80%",
     },
     logo: {
-      width: "60%", // Reduced logo size
+      width: "60%",
       height: undefined,
       resizeMode: "contain",
-      marginBottom: 15, // Reduced margin
+      marginBottom: 15,
     },
     title: {
       textAlign: "center",
       marginBottom: 15,
-      fontSize: ms(18), // Reduced font size for title
+      fontSize: ms(18),
     },
     buttonText: {
-      fontSize: ms(14), // Reduced font size for button text
+      fontSize: ms(14),
     },
     errorText: {
       color: "red",
       textAlign: "center",
-      fontSize: ms(12), // Reduced font size for error messages
+      fontSize: ms(12),
+      marginTop: 10,
     },
     linkText: {
       color: "#4CAF50",
       textAlign: "center",
-      fontSize: ms(14), // Reduced font size for link text
+      fontSize: ms(14),
     },
   });
 
   type InputValueKey = keyof typeof inputValue;
 
   const placeholders: Record<InputValueKey, string> = {
-    email: "Email Address",
-    displayName: "Display Name",
+    email: "Alamat Email",
+    displayName: "Nama Lengkap",
     password: "Password",
-    confirmPassword: "Confirm Password",
+    confirmPassword: "Konfirmasi Password",
   };
 
   const validateInput = (key: InputValueKey) => {
     let hasError = false;
     const value = inputValue[key];
-
     const regex = {
       email: /^[\w.%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
-      displayName: /^[a-zA-Z0-9]{2,25}$/,
-      password: /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$/,
+      displayName: /^[a-zA-Z\s]{3,50}$/,
+      password: /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$/,
     };
 
     switch (key) {
@@ -102,28 +108,28 @@ export default function SignUp() {
         hasError = !regex.email.test(value);
         setErrors((prev) => ({
           ...prev,
-          email: hasError ? "Invalid email" : "",
+          email: hasError ? "Format email tidak valid" : "",
         }));
         break;
       case "displayName":
         hasError = !regex.displayName.test(value);
         setErrors((prev) => ({
           ...prev,
-          displayName: hasError ? "Invalid name" : "",
+          displayName: hasError ? "Nama tidak valid" : "",
         }));
         break;
       case "password":
         hasError = !regex.password.test(value);
         setErrors((prev) => ({
           ...prev,
-          password: hasError ? "Weak password" : "",
+          password: hasError ? "Password lemah (min 8 char, 1 besar, 1 kecil, 1 angka)" : "",
         }));
         break;
       case "confirmPassword":
         hasError = value !== inputValue.password;
         setErrors((prev) => ({
           ...prev,
-          confirmPassword: hasError ? "Passwords do not match" : "",
+          confirmPassword: hasError ? "Password tidak cocok" : "",
         }));
         break;
     }
@@ -133,42 +139,74 @@ export default function SignUp() {
   };
 
   useEffect(() => {
-    const allValid =
-      Object.values(errors).every((e) => !e) &&
-      Object.values(inputValue).every((v) => v !== "");
-    setCanSubmit(allValid);
+    const allFilled = Object.values(inputValue).every((v) => v !== "");
+    const noErrors = Object.values(errors).every((e) => !e);
+    setCanSubmit(allFilled && noErrors);
   }, [errors, inputValue]);
 
   useEffect(() => {
     if (session) {
-      console.log("Redirecting to /");
       router.replace("/");
     }
   }, [session]);
 
   const handleSubmit = async () => {
-    let isValid = true;
+    let isFormValid = true;
     Object.keys(inputValue).forEach((key) => {
-      if (validateInput(key as InputValueKey)) isValid = false;
+      if (validateInput(key as InputValueKey)) {
+        isFormValid = false;
+      }
     });
 
-    if (!isValid) return;
+    if (!isFormValid || !canSubmit) {
+      Alert.alert("Error", "Harap periksa kembali semua isian Anda.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setApiError("");
+
+    const payload = {
+      name: inputValue.displayName,
+      email: inputValue.email,
+      password: inputValue.password,
+    };
 
     try {
-      await signUp(
-        inputValue.email,
-        inputValue.password,
-        inputValue.displayName
+      const response = await axiosInstance.post("/register", payload);
+
+      Alert.alert(
+        "Pendaftaran Berhasil",
+        "Akun Anda telah berhasil dibuat. Silakan login.",
+        [{ text: "OK", onPress: () => router.replace("/sign-in") }]
       );
-      Alert.alert("Success", "Account created successfully!");
-      router.replace("/");
-    } catch (err) {
-      Alert.alert("Sign Up Failed", error || "An error occurred.");
+
+    } catch (err: any) {
+      let errorMessage = "Terjadi kesalahan. Silakan coba lagi nanti.";
+
+      if (err.response && err.response.data) {
+        const responseData = err.response.data;
+
+        if (responseData.errors) {
+          const errorMessages = Object.values(responseData.errors).flat();
+          errorMessage = errorMessages.join("\n");
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setApiError(errorMessage);
+      Alert.alert("Pendaftaran Gagal", errorMessage);
+
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <ScrollView>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
       <ThemedView style={styles.wrapper}>
         <Image
           source={require("@/assets/images/logo.png")}
@@ -197,14 +235,14 @@ export default function SignUp() {
                   : false
               }
               icon={
-                field === "password" ? (
+                field === "password" || field === "confirmPassword" ? (
                   securePasswordEntry ? (
                     <AntDesign
                       name="eyeo"
                       onPress={() =>
                         setSecurePasswordEntry(!securePasswordEntry)
                       }
-                      size={ms(20)} // Reduced icon size
+                      size={ms(20)}
                     />
                   ) : (
                     <Feather
@@ -212,7 +250,7 @@ export default function SignUp() {
                       onPress={() =>
                         setSecurePasswordEntry(!securePasswordEntry)
                       }
-                      size={ms(20)} // Reduced icon size
+                      size={ms(20)}
                     />
                   )
                 ) : undefined
@@ -221,19 +259,21 @@ export default function SignUp() {
           ))}
 
           <ThemedPressable
-            disabled={!canSubmit || isLoading}
+            disabled={!canSubmit || isSubmitting}
             onPress={handleSubmit}
-            style={!canSubmit && { backgroundColor: "#ccc" }}
+            style={
+              !canSubmit || isSubmitting ? { backgroundColor: "#ccc" } : {}
+            }
           >
             <ThemedText style={styles.buttonText}>
-              {isLoading ? "Signing Up..." : "Sign Up"}
+              {isSubmitting ? "Mendaftar..." : "Daftar"}
             </ThemedText>
           </ThemedPressable>
 
-          {error && <ThemedText style={styles.errorText}>{error}</ThemedText>}
+          {apiError ? <ThemedText style={styles.errorText}>{apiError}</ThemedText> : null}
 
           <ThemedText
-            onPress={() => router.push("./sign-in")}
+            onPress={() => router.push("/auth/sign-up")}
             style={styles.linkText}
             type="link"
           >

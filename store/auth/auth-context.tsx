@@ -52,7 +52,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   // API base URL
   const API_URL =
-    process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+    process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
   useEffect(() => {
     // Check existing session on mount
@@ -68,7 +68,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const response = await axios.get(`${API_URL}/auth/validate`, {
+      const response = await axios.get(`${API_URL}/validate`, {
         headers: {
           Authorization: `Bearer ${JSON.parse(session).token}`,
         },
@@ -118,7 +118,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     signIn: async (email, password) => {
       setError(null);
       try {
-        const response = await axios.post(`${API_URL}/auth/login`, {
+        const response = await axios.post(`${API_URL}/login`, {
           email,
           password,
         });
@@ -140,7 +140,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setError(null);
       try {
         await axios.post(
-          `${API_URL}/auth/logout`,
+          `${API_URL}/logout`,
           {},
           {
             headers: {
@@ -159,7 +159,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     signUp: async (email, password, name) => {
       setError(null);
       try {
-        const response = await axios.post(`${API_URL}/auth/register`, {
+        const response = await axios.post(`${API_URL}/register`, {
           email,
           password,
           name,
