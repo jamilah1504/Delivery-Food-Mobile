@@ -9,11 +9,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
-  Modal
+  Modal,
+  ScrollView,
+  Button
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import axiosInstance from "../../utils/axiosInstance"; // Import axiosInstance
+import { useAuth } from "@/utils/AuthContext";
 
 export default function HistoryBelanjaScreen() {
   const router = useRouter();
@@ -22,11 +26,21 @@ export default function HistoryBelanjaScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const {user}=useAuth();
 
   const fetchHistory = useCallback(async () => {
     try {
       // Mengambil data dari API /order/1
-      const response = await axiosInstance.get("/order/1");
+      const userId = user?.id;
+
+      // Pastikan userId ada sebelum membuat panggilan
+      if (!userId) {
+        console.error("User ID tidak ditemukan, request dibatalkan.");
+        return; 
+      }
+
+      // Gunakan backtick (`) dan sintaks ${userId}
+      const response = await axiosInstance.get(`/order/${userId}`);
       console.log("API Response:", response.data); // Debug log
       
       // Sesuaikan dengan struktur API yang sebenarnya
@@ -110,7 +124,7 @@ export default function HistoryBelanjaScreen() {
     router.push(`./Riview?orderId=${orderId}`);
   };
 
-  const API_IMAGE_URL = "http://127.0.0.1:8000/storage";
+  const API_IMAGE_URL = "http://192.168.43.146:8000/";
 
   const renderTransaction = ({ item }) => (
     <View style={styles.transactionCard}>
@@ -119,7 +133,7 @@ export default function HistoryBelanjaScreen() {
         <Image 
           source={{ 
             uri: item.order_items && item.order_items.length > 0 
-              ? `${API_IMAGE_URL}${item.order_items[0].product.image}` 
+              ? `http://192.168.43.146:8000/storage/${item.order_items[0].product.image}` 
               : 'https://via.placeholder.com/80x80'
           }} 
           style={styles.productImage} 
@@ -172,63 +186,86 @@ export default function HistoryBelanjaScreen() {
   );
 
   // Modal untuk Detail
-  const DetailModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={detailModalVisible}
-      onRequestClose={() => setDetailModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Detail Pesanan</Text>
-            <TouchableOpacity 
-              onPress={() => setDetailModalVisible(false)}
-              style={styles.closeButton}
-            >
-              <FontAwesome name="times" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-          
-          {selectedOrder && (
-            <View style={styles.modalBody}>
-              <Text style={styles.detailLabel}>ID Pesanan: {selectedOrder.id}</Text>
-              <Text style={styles.detailLabel}>Status: {selectedOrder.status}</Text>
-              <Text style={styles.detailLabel}>Tanggal: {formatDate(selectedOrder.created_at)}</Text>
-              
-              <Text style={styles.itemsTitle}>Item Pesanan:</Text>
+const DetailModal = () => (
+  <Modal
+    animationType="slide"
+    transparent={true}
+    visible={detailModalVisible}
+    onRequestClose={() => setDetailModalVisible(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Detail Pesanan</Text>
+          <TouchableOpacity 
+            onPress={() => setDetailModalVisible(false)}
+            style={styles.closeButton}
+          >
+            <FontAwesome name="times" size={18} color="#666" />
+          </TouchableOpacity>
+        </View>
+        
+        {selectedOrder && (
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {/* Order Info Section */}
+            <View style={styles.orderInfoContainer}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>ID:</Text>
+                <Text style={styles.infoValue}>{selectedOrder.id}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Status:</Text>
+                <Text style={[styles.infoValue, styles.statusText]}>{selectedOrder.status}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Tanggal:</Text>
+                <Text style={styles.infoValue}>{formatDate(selectedOrder.created_at)}</Text>
+              </View>
+            </View>
+            
+            {/* Items Section */}
+            <View style={styles.itemsSection}>
+              <Text style={styles.itemsTitle}>Item Pesanan</Text>
               {selectedOrder.order_items && selectedOrder.order_items.map((orderItem, index) => (
                 <View key={orderItem.id} style={styles.modalOrderItem}>
                   <Image 
-                    source={{ uri: `${API_IMAGE_URL}${orderItem.product.image}` }} 
+                    source={{ uri: `http://192.168.43.146:8000/storage/${orderItem.product.image}` }} 
                     style={styles.modalProductImage} 
                   />
                   <View style={styles.modalItemDetails}>
-                    <Text style={styles.modalProductName}>
+                    <Text style={styles.modalProductName} numberOfLines={2}>
                       {orderItem.product.name}
                     </Text>
-                    <Text style={styles.modalProductInfo}>
-                      {orderItem.quantity} x Rp {parseFloat(orderItem.price).toLocaleString("id-ID")}
-                    </Text>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.quantityText}>
+                        {orderItem.quantity} x 
+                      </Text>
+                      <Text style={styles.priceText}>
+                        Rp {parseFloat(orderItem.price).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
                     <Text style={styles.modalSubtotalText}>
-                      Subtotal: Rp {(parseFloat(orderItem.price) * orderItem.quantity).toLocaleString("id-ID")}
+                      Rp {(parseFloat(orderItem.price) * orderItem.quantity).toLocaleString("id-ID")}
                     </Text>
                   </View>
                 </View>
               ))}
-              
-              <View style={styles.modalFooter}>
-                <Text style={styles.modalTotalText}>
-                  Total: Rp {parseFloat(selectedOrder.total_amount).toLocaleString("id-ID")}
-                </Text>
-              </View>
             </View>
-          )}
+          </ScrollView>
+        )}
+        
+        {/* Fixed Footer */}
+        <View style={styles.modalFooter}>
+          <Text style={styles.modalTotalText}>
+            Total: Rp {selectedOrder ? parseFloat(selectedOrder.total_amount).toLocaleString("id-ID") : '0'}
+          </Text>
         </View>
       </View>
-    </Modal>
-  );
+    </View>
+  </Modal>
+);
+
+
 
   if (loading) {
     return (
@@ -241,7 +278,13 @@ export default function HistoryBelanjaScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>HISTORY</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#2E5BFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>History</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
       {history.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -290,6 +333,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: "#666",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2E5BFF",
   },
   title: {
     fontSize: 20,
@@ -385,93 +442,177 @@ const styles = StyleSheet.create({
   
   // Modal Styles
   modalOverlay: {
-    flex: 1,
+    flex: 1, 
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', // Modal dari bawah untuk mobile
   },
+  
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%', // Maksimal 90% tinggi layar
+    minHeight: '70%',
   },
+  
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderColor: '#E5E5E5',
+    borderBottomColor: '#E5E5E5',
   },
+  
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  modalBody: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  itemsTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  modalOrderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderColor: '#F5F5F5',
-  },
-  modalProductImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    marginRight: 12,
-    backgroundColor: '#E0E0E0',
-  },
-  modalItemDetails: {
-    flex: 1,
-  },
-  modalProductName: {
-    fontSize: 15,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
+    flex: 1,
   },
-  modalProductInfo: {
-    fontSize: 13,
+  
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  
+  modalBody: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  
+  orderInfoContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 12,
+  },
+  
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  
+  infoLabel: {
+    fontSize: 14,
     color: '#666',
-    marginBottom: 2,
-  },
-  modalSubtotalText: {
-    fontSize: 12,
-    color: '#888',
     fontWeight: '500',
   },
-  modalFooter: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  modalTotalText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#007AFF",
+  
+  infoValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '400',
+    flex: 1,
     textAlign: 'right',
+  },
+  
+  statusText: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  
+  itemsSection: {
+    marginBottom: 80, // Space untuk fixed footer
+  },
+  
+  itemsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  
+  modalOrderItem: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  
+  modalProductImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  
+  modalItemDetails: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'space-between',
+  },
+  
+  modalProductName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  
+  quantityText: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 4,
+  },
+  
+  priceText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  
+  modalSubtotalText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  
+  modalFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  
+  modalTotalText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
   },
 });

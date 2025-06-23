@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -11,31 +10,19 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Modal, // BARU: Import Modal
-  SafeAreaView, // BARU: Import SafeAreaView
+  SafeAreaView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { FontAwesome } from "@expo/vector-icons";
-import { WebView } from 'react-native-webview'; // BARU: Import WebView
+import { WebView } from 'react-native-webview';
 import axiosInstance from "@/utils/axiosInstance";
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-}
+import { useAuth } from "@/utils/AuthContext";
+import axios from "axios";
 
 export default function ConfirmationScreen() {
-  const { items, totalAmount, itemCount, checkoutData } = useLocalSearchParams();
+  const { items, totalAmount, itemCount } = useLocalSearchParams();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useAuth();
   
-  const parsedCart = JSON.parse(items || "[]");
-  const total = parseFloat(totalAmount || "0");
-  const count = parseInt(itemCount || "0");
-  const fullCheckoutData = checkoutData ? JSON.parse(checkoutData) : null;
-
   const [userData, setUserData] = useState({
     name: "",
     email: "",
@@ -44,115 +31,70 @@ export default function ConfirmationScreen() {
   });
   
   const [isLoading, setIsLoading] = useState(false);
-
-  // BARU: State untuk Midtrans
   const [snapToken, setSnapToken] = useState('');
   const [showWebView, setShowWebView] = useState(false);
+  
+  const parsedCart = JSON.parse(items as string || "[]");
+  const total = parseFloat(totalAmount as string || "0");
+  const count = parseInt(itemCount as string || "0");
 
   const now = new Date();
-  const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(
-    now.getMonth() + 1
-  ).padStart(2, "0")}/${now.getFullYear()}`;
-  const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes()
-  ).padStart(2, "0")}`;
+  const formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      const userDataFromStorage = await AsyncStorage.getItem("user");
-      const fetchedUser: User | null = userDataFromStorage ? JSON.parse(userDataFromStorage) : null;
-      setUser(fetchedUser);
-      
-      const savedFormData = await AsyncStorage.getItem("userData");
-      
-      if (savedFormData) {
-        setUserData(JSON.parse(savedFormData));
-      } else if (fetchedUser) {
-        setUserData({
-          name: fetchedUser.name || "",
-          email: fetchedUser.email || "",
-          address: "",
-          phone: "",
-        });
-      }
-    } catch (error) {
-      console.error("Error loading user data:", error);
+    if (user) {
+      setUserData({
+        name: user.name || "",
+        email: user.email || "",
+        address: (user as any).address || "",
+        phone: (user as any).phone || "",
+      });
     }
+  }, [user]);
+
+  const validateForm = () => {
+    if (!userData.name || !userData.email || !userData.address || !userData.phone) {
+      Alert.alert("Data Tidak Lengkap", "Pastikan semua informasi pelanggan telah terisi.");
+      return false;
+    }
+    return true;
   };
 
-  const saveUserData = async () => {
-    try {
-      await AsyncStorage.setItem("userData", JSON.stringify(userData));
-    } catch (error) {
-      console.error("Error saving user data:", error);
-    }
-  };
-  
-  const validateForm = () => { /* ... (fungsi validasi tidak berubah) ... */ return true; };
-
-  // MODIFIKASI: Fungsi untuk memproses pembayaran
   const handleProceedToPayment = async () => {
     if (!validateForm()) return;
-    // if (!user) {
-    //   Alert.alert("Error", "Anda harus login terlebih dahulu");
-    //   return;
-    // }
+    if (!user) {
+      Alert.alert("Error", "Sesi Anda telah berakhir. Silakan login kembali.");
+      router.replace('/sign-in');
+      return;
+    }
     if (!parsedCart || parsedCart.length === 0) {
-      Alert.alert("Error", "Keranjang kosong");
+      Alert.alert("Error", "Keranjang Anda kosong.");
       return;
     }
 
     setIsLoading(true);
     
     try {
-      await saveUserData();
-      
+      // ... (kode paymentData tetap sama)
       const paymentData = {
-        customer: {
-          user_id: 1,
-          // user_id: user.id,
-          name: userData.name,
-          email: userData.email,
-          address: userData.address,
-          phone: userData.phone,
-        },
-        items: parsedCart.map(item => ({
-          product_id: item.product.id,
-          product_name: item.product.name,
-          price: parseFloat(item.product.price || 0),
-          quantity: item.quantity || 1,
-          subtotal: parseFloat(item.product.price || 0) * (item.quantity || 1),
-          category: item.product.category?.category || "Uncategorized",
-        })),
-        order_summary: {
-          total_amount: total,
-          total_items: count,
-          order_date: formattedDate,
-          order_time: formattedTime,
-        },
+        customer: { user_id: user.id, name: userData.name, email: userData.email, address: userData.address, phone: userData.phone, },
+        items: parsedCart.map(item => ({ product_id: item.product.id, product_name: item.product.name, price: parseFloat(item.product.price || 0), quantity: item.quantity || 1, subtotal: parseFloat(item.product.price || 0) * (item.quantity || 1), category: item.product.category?.category || "Uncategorized", })),
+        order_summary: { total_amount: total, total_items: count, order_date: formattedDate, order_time: formattedTime, },
       };
-
-      console.log('Mengirim data ke backend:', JSON.stringify(paymentData, null, 2));
-
-      // Kirim data ke backend untuk mendapatkan Snap Token
+      
       const response = await axiosInstance.post(`/create-transaction`, paymentData);
       
       if (response.data.snap_token) {
         setSnapToken(response.data.snap_token);
-        setShowWebView(true); // Tampilkan WebView
+        setShowWebView(true);
       } else {
-        throw new Error('Snap token tidak diterima');
+        throw new Error('Snap token tidak diterima dari server');
       }
-
     } catch (error) {
       console.error("Error processing payment:", error);
       let errorMessage = "Terjadi kesalahan saat memproses pembayaran";
       if (axios.isAxiosError(error) && error.response) {
-          console.log('Error response:', error.response.data);
           errorMessage = error.response.data.message || "Error dari server";
       }
       Alert.alert("Error", errorMessage);
@@ -161,156 +103,90 @@ export default function ConfirmationScreen() {
     }
   };
 
-  const updateOrderStatus = async (orderId, transactionStatus) => {
-    try {
-      // Data yang akan dikirim sebagai body request
-      const payload = {
-        order_id: orderId,
-        transaction_status: transactionStatus,
-      };
-
-      // Panggil endpoint menggunakan axiosInstance.post(endpoint, data)
-      // - Axios otomatis mengubah payload menjadi JSON.
-      // - baseURL dan headers sudah diatur di dalam instance.
-      const response = await axiosInstance.post('/orders/update-status', payload);
-
-      console.log(`Status for order ${orderId} updated successfully. Server response:`, response.data.message);
-
-    } catch (error) {
-      // Axios memberikan detail error yang lebih baik, yang bisa kita manfaatkan
-      console.error(`Failed to update status for order ${orderId}.`);
-      
-      if (error.response) {
-        // Request berhasil dikirim dan server merespons dengan kode status error (bukan 2xx)
-        console.error('Error Data:', error.response.data);
-        console.error('Error Status:', error.response.status);
-      } else if (error.request) {
-        // Request berhasil dikirim tapi tidak ada respons yang diterima (masalah jaringan)
-        console.error('Error Request:', 'No response received from the server. Check your network or Ngrok connection.');
-      } else {
-        // Terjadi error saat menyiapkan request
-        console.error('Error Message:', error.message);
-      }
-    }
-  };
-
-  const getUrlParams = (url) => {
-    const params = {};
-    const regex = /[?&]([^=#]+)=([^&#]*)/g;
-    let match;
-    while (match = regex.exec(url)) {
-      params[match[1]] = match[2];
-    }
-    return params;
-  };
-
-
-  const handleWebViewNavigationStateChange = (newNavState) => {
+  // ======================================================================
+  // FUNGSI BARU UNTUK MENANGANI HASIL PEMBAYARAN
+  // ======================================================================
+  const handleWebViewNavigationStateChange = (newNavState: any) => {
     const { url } = newNavState;
     if (!url) return;
 
-    const getUrlParams = (url) => {
-      const params = {};
-      const regex = /[?&]([^=#]+)=([^&#]*)/g;
-      let match;
-      while ((match = regex.exec(url))) {
-        params[match[1]] = decodeURIComponent(match[2]);
-      }
-      return params;
-    };
-
-    const params = getUrlParams(url);
-    const orderId = params.order_id;
-    const transactionStatus = params.transaction_status;
-
-    // Jika transaksi berhasil, arahkan ke halaman review dengan orderId
-    if (orderId && (transactionStatus === 'capture' || transactionStatus === 'settlement')) {
-      setShowWebView(false);
-      updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
-      Alert.alert("Sukses", "Pembayaran Anda telah berhasil diproses.", [
-        {
-          text: "OK",
-          // Mengarahkan ke halaman review dengan menyertakan orderId
-          onPress: () => router.replace(`/property/review?orderId=${orderId}`)
+    // Cek jika URL adalah callback dari Midtrans yang menandakan transaksi selesai
+    // URL ini adalah contoh, sesuaikan dengan URL callback Midtrans Anda jika berbeda
+    if (url.includes('midtrans/callback') || url.includes('transaction_status')) {
+      // Fungsi untuk mengambil parameter dari URL
+      const getUrlParams = (url: string) => {
+        const params = {};
+        const regex = /[?&]([^=#]+)=([^&#]*)/g;
+        let match;
+        while ((match = regex.exec(url))) {
+          params[match[1]] = decodeURIComponent(match[2]);
         }
-      ]);
-    }
-    // Jika transaksi pending
-    else if (orderId && transactionStatus === 'pending') {
+        return params;
+      };
+
+      const params = getUrlParams(url);
+      const transactionStatus = params['transaction_status'];
+
+      // Sembunyikan WebView
       setShowWebView(false);
-      updateOrderStatus(orderId, transactionStatus); // Panggil fungsi update
-      Alert.alert("Tertunda", "Pembayaran Anda sedang menunggu penyelesaian.", [
-        { text: "OK", onPress: () => router.replace('/') }
-      ]);
-    }
-    // Jika webview ditutup atau transaksi gagal/dibatalkan
-    else if (url.includes('/close') || (orderId && (transactionStatus === 'deny' || transactionStatus === 'expire' || transactionStatus === 'cancel'))) {
-      setShowWebView(false);
-      if (orderId) {
-        updateOrderStatus(orderId, transactionStatus || 'cancelled'); // Panggil fungsi update
+
+      if (transactionStatus === 'capture' || transactionStatus === 'settlement') {
+        // --- PEMBAYARAN BERHASIL ---
+        Alert.alert(
+          "Pembayaran Berhasil",
+          "Terima kasih, pembayaran Anda telah berhasil kami terima.",
+          [{ 
+            text: "OK", 
+            onPress: () => router.replace('../property/HistoryBelanjaScreen') // Ganti dengan path halaman history Anda yang benar
+          }]
+        );
+      } else if (transactionStatus === 'pending') {
+        // --- PEMBAYARAN PENDING ---
+        Alert.alert(
+          "Pembayaran Tertunda",
+          "Pembayaran Anda sedang menunggu penyelesaian. Anda akan diarahkan ke halaman utama.",
+          [{ 
+            text: "OK", 
+            onPress: () => router.replace('/') // Arahkan ke home
+          }]
+        );
+      } else {
+        // --- PEMBAYARAN GAGAL (deny, cancel, expire, dll) ---
+        Alert.alert(
+          "Pembayaran Gagal",
+          "Maaf, pembayaran Anda gagal diproses. Silakan coba lagi.",
+          [{ 
+            text: "OK", 
+            onPress: () => router.replace('/') // Arahkan ke home
+          }]
+        );
       }
-      // Opsional: Anda bisa arahkan ke halaman lain jika diperlukan saat gagal/tutup
-      // router.replace('/'); 
     }
   };
 
-  const renderFoodImage = (item) => {
+  // JIKA SEDANG MEMBUKA WEBVIEW, TAMPILKAN WEBVIEW SAJA
+  if (showWebView && snapToken) {
     return (
-      <View style={styles.imageContainer}>
-        {item.product?.image ? (
-        //   <>
-        //     <Image
-        //       source={{ 
-        //         uri: item.product.image === 'default.jpg' 
-        //           ? 'https://via.placeholder.com/150' 
-        //           : item.product.image 
-        //       }}
-        //       style={styles.foodImage}
-        //       resizeMode="cover"
-        //       onLoadStart={() => setImageLoading(true)}
-        //       onLoadEnd={() => setImageLoading(false)}
-        //       onError={() => setImageLoading(false)}
-        //     />
-        //     {imageLoading && (
-        //       <ActivityIndicator
-        //         style={styles.loadingIndicator}
-        //         size="small"
-        //         color="#000"
-        //       />
-        //     )}
-        //   </>
-        <View></View>
-        ) : (
-          <View style={[styles.foodImage, styles.imagePlaceholder]}>
-            <FontAwesome name="cutlery" size={24} color="#999" />
-          </View>
-        )}
-      </View>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WebView
+          source={{ uri: `https://app.sandbox.midtrans.com/snap/v2/vtweb/${snapToken}` }}
+          // AKTIFKAN onNavigationStateChange untuk memanggil fungsi di atas
+          onNavigationStateChange={handleWebViewNavigationStateChange}
+        />
+      </SafeAreaView>
     );
-  };
+  }
 
-    // JIKA SEDANG MEMBUKA WEBVIEW, TAMPILKAN WEBVIEW SAJA
-    if (showWebView && snapToken) {
-      return (
-        <SafeAreaView style={{ flex: 1 }}>
-          <WebView
-            source={{ uri: `https://app.sandbox.midtrans.com/snap/v2/vtweb/${snapToken}` }}
-            onNavigationStateChange={handleWebViewNavigationStateChange}
-          />
-        </SafeAreaView>
-      );
-    }
-
-
+  // ... (Sisa JSX lainnya tetap sama)
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Konfirmasi Pesanan</Text>
-
-        {/* Order Summary */}
+        {/* ... (Isi ScrollView tidak berubah) ... */}
+        {/* ... */}
+         {/* Order Summary */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Ringkasan Pesanan</Text>
           
@@ -318,7 +194,7 @@ export default function ConfirmationScreen() {
             <View style={styles.orderSummary}>
               {parsedCart.map((item, index) => (
                 <View key={index} style={styles.orderRow}>
-                  {renderFoodImage(item)}
+                  {/* {renderFoodImage(item)} */}
                   <View style={styles.orderDetails}>
                     <Text style={styles.foodTitle} numberOfLines={2}>
                       {item.product?.name || "Produk"}
@@ -354,54 +230,52 @@ export default function ConfirmationScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Informasi Pelanggan</Text>
           
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Nama Lengkap *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={userData.name}
-              onChangeText={(text) => setUserData({...userData, name: text})}
-              placeholder="Masukkan nama lengkap"
-              placeholderTextColor="#999"
-            />
-          </View>
+          {isLoading && !snapToken ? ( // Tampilkan loading hanya saat data form dimuat
+            <ActivityIndicator size="large" color="#007bff" style={{ marginVertical: 20 }} />
+          ) : (
+            <>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Nama Lengkap</Text>
+                <TextInput
+                  style={[styles.textInput, styles.disabledInput]}
+                  value={userData.name}
+                  editable={false}
+                />
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Email *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={userData.email}
-              onChangeText={(text) => setUserData({...userData, email: text})}
-              placeholder="Masukkan email"
-              placeholderTextColor="#999"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput
+                  style={[styles.textInput, styles.disabledInput]}
+                  value={userData.email}
+                  editable={false}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Alamat Lengkap *</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              value={userData.address}
-              onChangeText={(text) => setUserData({...userData, address: text})}
-              placeholder="Masukkan alamat lengkap"
-              placeholderTextColor="#999"
-              multiline={true}
-              numberOfLines={3}
-            />
-          </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Alamat Lengkap</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea, styles.disabledInput]}
+                  value={userData.address}
+                  editable={false}
+                  multiline={true}
+                  numberOfLines={3}
+                />
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Nomor Telepon *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={userData.phone}
-              onChangeText={(text) => setUserData({...userData, phone: text})}
-              placeholder="Masukkan nomor telepon"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-            />
-          </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Nomor Telepon</Text>
+                <TextInput
+                  style={[styles.textInput, styles.disabledInput]}
+                  value={userData.phone}
+                  editable={false}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </>
+          )}
         </View>
 
         {/* Action Buttons */}
@@ -419,7 +293,7 @@ export default function ConfirmationScreen() {
             style={[styles.button, styles.proceedButton]}
             disabled={isLoading}
           >
-            {isLoading ? (
+            {isLoading && !showWebView ? ( // Tampilkan loading hanya saat proses ke pembayaran
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <Text style={styles.proceedButtonText}>Proses Pembayaran</Text>
@@ -431,171 +305,176 @@ export default function ConfirmationScreen() {
   );
 }
 
+// ... (Styles object tidak berubah)
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: "#fff" 
-  },
-  scrollView: {
-    flex: 1,
-    padding: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
-    color: "#333",
-  },
-  card: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e9ecef",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: "#333",
-  },
-  orderSummary: {
-    marginBottom: 12,
-  },
-  orderRow: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
-  },
-  imageContainer: {
-    position: "relative",
-    width: 60,
-    height: 60,
-  },
-  foodImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  imagePlaceholder: {
-    backgroundColor: "#f0f0f0",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  loadingIndicator: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  orderDetails: {
-    flex: 1,
-    marginRight: 8,
-  },
-  foodTitle: { 
-    fontWeight: "600", 
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 4,
-  },
-  foodPrice: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 2,
-  },
-  foodCategory: {
-    fontSize: 11,
-    color: "#999",
-  },
-  quantityInfo: {
-    alignItems: "flex-end",
-  },
-  quantityText: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
-  },
-  subtotalText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-  },
-  divider: {
-    borderBottomColor: "#dee2e6",
-    borderBottomWidth: 1,
-    marginVertical: 12,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#161b44",
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 6,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: "#dee2e6",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    backgroundColor: "#fff",
-    color: "#333",
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 30,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backButton: {
-    backgroundColor: "#6c757d",
-  },
-  backButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  proceedButton: {
-    backgroundColor: "#161b44",
-  },
-  proceedButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+    container: { 
+      flex: 1, 
+      backgroundColor: "#fff" 
+    },
+    disabledInput: {
+        backgroundColor: '#f0f0f0', // Warna abu-abu untuk field yang tidak bisa diedit
+        color: '#666',
+    },
+    scrollView: {
+      flex: 1,
+      padding: 16,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "bold",
+      textAlign: "center",
+      marginBottom: 20,
+      color: "#333",
+    },
+    card: {
+      backgroundColor: "#f8f9fa",
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: "#e9ecef",
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      marginBottom: 12,
+      color: "#333",
+    },
+    orderSummary: {
+      marginBottom: 12,
+    },
+    orderRow: { 
+      flexDirection: "row", 
+      alignItems: "center", 
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: "#e9ecef",
+    },
+    imageContainer: {
+      position: "relative",
+      width: 60,
+      height: 60,
+    },
+    foodImage: {
+      width: 60,
+      height: 60,
+      borderRadius: 8,
+      marginRight: 12,
+    },
+    imagePlaceholder: {
+      backgroundColor: "#f0f0f0",
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    loadingIndicator: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+    },
+    orderDetails: {
+      flex: 1,
+      marginRight: 8,
+    },
+    foodTitle: { 
+      fontWeight: "600", 
+      fontSize: 14,
+      color: "#333",
+      marginBottom: 4,
+    },
+    foodPrice: {
+      fontSize: 12,
+      color: "#666",
+      marginBottom: 2,
+    },
+    foodCategory: {
+      fontSize: 11,
+      color: "#999",
+    },
+    quantityInfo: {
+      alignItems: "flex-end",
+    },
+    quantityText: {
+      fontSize: 12,
+      color: "#666",
+      marginBottom: 4,
+    },
+    subtotalText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: "#333",
+    },
+    divider: {
+      borderBottomColor: "#dee2e6",
+      borderBottomWidth: 1,
+      marginVertical: 12,
+    },
+    totalRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    totalLabel: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: "#333",
+    },
+    totalValue: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: "#161b44",
+    },
+    inputContainer: {
+      marginBottom: 16,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#333",
+      marginBottom: 6,
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: "#dee2e6",
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 14,
+      backgroundColor: "#fff",
+      color: "#333",
+    },
+    textArea: {
+      height: 80,
+      textAlignVertical: "top",
+    },
+    buttonContainer: {
+      flexDirection: "row",
+      gap: 12,
+      marginBottom: 30,
+    },
+    button: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backButton: {
+      backgroundColor: "#6c757d",
+    },
+    backButtonText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    proceedButton: {
+      backgroundColor: "#161b44",
+    },
+    proceedButtonText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });

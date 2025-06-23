@@ -1,5 +1,7 @@
+import axiosInstance from "@/utils/axiosInstance";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -10,7 +12,7 @@ import {
 } from "react-native";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: "http://192.168.43.146:8000/api",
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -19,7 +21,7 @@ const api = axios.create({
 
 const getNotifications = async () => {
   try {
-    const response = await api.get("/notifications");
+    const response = await axiosInstance.get("/notifications");
     console.log("API Response:", JSON.stringify(response.data, null, 2));
     return response.data.data || response.data || [];
   } catch (error) {
@@ -34,7 +36,7 @@ const getNotifications = async () => {
 
 const deleteNotification = async (id) => {
   try {
-    await api.delete(`/notifications/${id}`);
+    await axiosInstance.delete(`/notifications/${id}`);
     return true;
   } catch (error) {
     console.error("Error deleting notification:", {
@@ -50,6 +52,8 @@ export default function NotificationScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const router = useRouter();
+  
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -117,7 +121,13 @@ export default function NotificationScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Notification</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#2E5BFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>History</Text>
+        <View style={{ width: 24 }} />
+      </View>
       {notifications.length === 0 ? (
         <Text style={styles.emptyText}>Tidak ada notifikasi tersedia</Text>
       ) : (
@@ -178,6 +188,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2E5BFF",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1A1A1A",
+    marginBottom: 20,
+    textAlign: "center",
   },
   textContainer: {
     flex: 1,

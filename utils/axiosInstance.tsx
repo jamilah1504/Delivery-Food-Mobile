@@ -1,7 +1,8 @@
 // File: utils/axiosInstance.js
 
 import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// Ganti AsyncStorage dengan SecureStore
+import * as SecureStore from 'expo-secure-store';
 
 // ======================================================================
 // PENTING: PENGATURAN BASE URL
@@ -16,13 +17,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Cari alamat IPv4 Anda (misalnya: 192.168.1.7, 192.168.43.146, dll.)
 
 // GANTI ALAMAT IP DI BAWAH INI SESUAI DENGAN ALAMAT IP KOMPUTER ANDA
-const baseURL = "http://127.0.0.1:8000/api"; 
+const baseURL = "http://192.168.43.146:8000/api"; 
 // const baseURL = "http://192.168.43.146:8000/api"; 
+// File: utils/axiosInstance.js
 
+
+// ... (kode baseURL tetap sama)
 
 const axiosInstance = axios.create({
   baseURL,
-  // Timeout untuk mencegah request menggantung selamanya
   timeout: 10000, 
   headers: {
     "Accept": 'application/json',
@@ -30,73 +33,32 @@ const axiosInstance = axios.create({
 });
 
 
-// ======================================================================
 // INTERCEPTOR REQUEST: MENAMBAHKAN BEARER TOKEN SECARA OTOMATIS
-// ======================================================================
-// Interceptor ini akan berjalan SETIAP KALI ada request yang dibuat
-// menggunakan `axiosInstance`.
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // 1. Ambil token dari AsyncStorage.
-    const token = await AsyncStorage.getItem('userToken');
+    // 1. Ambil token dari SecureStore dengan kunci yang sama seperti di AuthContext.
+    const token = await SecureStore.getItemAsync('user_token'); // <-- Kunci disamakan
 
     // 2. Jika token ada, tambahkan ke header Authorization.
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Token attached to request headers.'); // Pesan untuk debugging
     }
 
-    // 3. Menangani FormData untuk upload file.
-    // Jika data adalah FormData, biarkan Axios yang mengatur header Content-Type.
+    // ... (sisa kode untuk FormData dan Content-Type tetap sama)
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     } else {
-    // 4. Untuk request JSON biasa, pastikan header-nya benar.
       config.headers['Content-Type'] = 'application/json';
     }
     
-    // 5. Kembalikan config yang sudah dimodifikasi agar request bisa dilanjutkan.
     return config;
   },
   (error) => {
-    // Jika ada error saat persiapan request, langsung reject.
     return Promise.reject(error);
   }
 );
 
-
-// ======================================================================
-// INTERCEPTOR RESPONSE: MENANGANI AUTO-LOGOUT SAAT TOKEN EXPIRED
-// ======================================================================
-let logoutHandler;
-
-export const injectLogout = (logoutFunction) => {
-  logoutHandler = logoutFunction;
-};
-
-// Interceptor ini akan berjalan SETIAP KALI ada response yang diterima.
-axiosInstance.interceptors.response.use(
-  // Jika response sukses (status 2xx), langsung kembalikan.
-  (response) => response,
-  
-  // Jika response gagal (status bukan 2xx), jalankan fungsi ini.
-  async (error) => {
-    const originalRequest = error.config; // Request asli yang menyebabkan error
-
-    // Cek jika error disebabkan oleh token tidak valid (status 401 Unauthorized)
-    // dan request ini bukan request untuk refresh token (menghindari loop tak terbatas).
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
-      console.log("Token tidak valid atau expired. Menjalankan auto-logout.");
-      
-      // Panggil fungsi logout yang telah di-inject dari AuthContext.
-      if (typeof logoutHandler === 'function') {
-        await logoutHandler();
-      }
-    }
-
-    // Kembalikan error agar bisa ditangani lebih lanjut di tempat pemanggilan API (misal di dalam blok catch).
-    return Promise.reject(error);
-  }
-);
-
+// ... (Interceptor Response tetap sama)
 
 export default axiosInstance;

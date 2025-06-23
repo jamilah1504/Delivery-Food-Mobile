@@ -1,41 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router"; // Ganti useNavigation() dengan useRouter()
+import { useRouter } from "expo-router";
 import { Image, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-
-// Asumsikan Anda memiliki instance axios yang sudah dikonfigurasi
-// dan context untuk autentikasi
 import axiosInstance from "../../utils/axiosInstance"; 
 import { useAuth } from "../../utils/AuthContext";
 
 export default function ProfileScreen() {
-  const router = useRouter(); // Gunakan router dari expo-router
-  const { logout } = useAuth();
+  const router = useRouter();
+  const { user, logout } = useAuth(); // Dapatkan fungsi logout dari context
 
+  // Fungsi untuk menangani proses logout
   const handleLogout = async () => {
     try {
-      // 1. Panggil API untuk logout dari server
-      // Endpoint '/api/logout' adalah umum untuk Laravel, sesuaikan jika perlu
+      // Panggil API backend untuk meng-invalidate token di server.
       await axiosInstance.post('/logout');
-
-      // 2. Hapus token dari AsyncStorage di sisi klien
-      // Pastikan key 'userToken' sama dengan yang Anda gunakan saat login
-      await AsyncStorage.removeItem('userToken');
+    } catch (apiError) {
+      console.error("API logout failed, logging out client-side anyway:", apiError);
+      // Tetap lanjutkan proses logout di sisi client meskipun API gagal
+    } finally {
+      // Panggil fungsi logout dari context.
+      // Ini akan menghapus token dari state & penyimpanan, lalu memicu redirect.
+      logout();
       
-      // 3. Update state global (opsional, tapi sangat direkomendasikan)
-      logout(); // Mereset state user menjadi null
-      
-      // 4. Arahkan pengguna ke halaman sign-in
-      // `replace` digunakan agar pengguna tidak bisa kembali ke halaman sebelumnya
-      router.replace('./sign-in');
-
-    } catch (error) {
-      console.error("Logout failed:", error);
-      Alert.alert("Error", "Gagal untuk logout, silakan coba lagi.");
+      // Navigasi ke halaman login untuk memastikan pengguna keluar
+      router.replace('/sign-in');
     }
   };
 
+  // Fungsi untuk menampilkan dialog konfirmasi sebelum logout
   const confirmLogout = () => {
     Alert.alert(
       "Konfirmasi Logout",
@@ -62,20 +53,11 @@ export default function ProfileScreen() {
           source={require("@/assets/images/splash-icon.png")}
           style={styles.profileImage}
         />
-        <Text style={styles.profileName}>Secret</Text>
-        <Text style={styles.profileLocation}>Subang, Jawa Barat</Text>
+        <Text style={styles.profileName}>{user?.name}</Text>
+        <Text style={styles.profileLocation}>Lokasi Pengguna</Text>
       </View>
 
       <View style={styles.settingsContainer}>
-        <TouchableOpacity
-          style={styles.settingItem}
-          onPress={() => router.push("/property/OrderTrackingScreen")}
-        >
-          <Ionicons name="cube-outline" size={20} color="#555" />
-          <Text style={styles.settingText}>Order tracking</Text>
-          <Ionicons name="chevron-forward" size={18} color="#aaa" />
-        </TouchableOpacity>
-
         <TouchableOpacity
           style={styles.settingItem}
           onPress={() => router.push("/property/HistoryBelanjaScreen")}
@@ -94,18 +76,10 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#aaa" />
         </TouchableOpacity>
 
+        {/* Tombol ini sekarang memanggil fungsi confirmLogout */}
         <TouchableOpacity
           style={styles.settingItem}
-          onPress={() => router.push("/property/PengaturanScreen")}
-        >
-          <Ionicons name="settings-outline" size={20} color="#555" />
-          <Text style={styles.settingText}>Pengaturan</Text>
-          <Ionicons name="chevron-forward" size={18} color="#aaa" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.settingItem}
-          onPress={() => console.log("Logout pressed")}
+          onPress={confirmLogout}
         >
           <Ionicons name="log-out-outline" size={20} color="red" />
           <Text style={[styles.settingText, { color: "red" }]}>Log out</Text>

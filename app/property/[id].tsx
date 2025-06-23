@@ -1,5 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import axiosInstance from "@/utils/axiosInstance";
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -11,13 +12,32 @@ import {
   View,
 } from "react-native";
 
-// const api = axiosInstance.create({
-//   baseURL: "http://127.0.0.1:8000/api",
-//   headers: {
-//     "Content-Type": "application/json",
-//     Accept: "application/json",
-//   },
-// });
+// Konfigurasi axios
+const api = axios.create({
+  baseURL: "http://192.168.43.146:8000/api",
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
+});
+
+// Helper function untuk menentukan icon berdasarkan nama kategori
+const getCategoryIcon = (categoryName) => {
+  const iconMap = {
+    "all menu": "list",
+    makanan: "fast-food",
+    minuman: "water",
+    cemilan: "pizza",
+    snack: "cafe",
+    dessert: "ice-cream",
+    "makanan berat": "restaurant",
+    kue: "cake",
+    kopi: "cafe",
+    teh: "cafe",
+    jus: "water",
+  };
+  return iconMap[categoryName?.toLowerCase() || ""] || "fast-food";
+};
 
 // Helper function untuk memformat angka
 const numberFormat = (value) => {
@@ -36,77 +56,59 @@ export default function ProductDetail() {
   const router = useRouter();
 
   useEffect(() => {
-    // Validasi id
-    if (!id) {
-      setError("ID produk tidak valid");
-      setLoading(false);
-      return;
-    }
+  if (!id) {
+    setError("ID produk tidak valid");
+    setLoading(false);
+    return;
+  }
 
-    console.log("Fetching product with id:", id); // Debug id
-    const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        // Fetch product details
-        const productResponse = await axiosInstance.get(`/products/${id}`);
-        const item = productResponse.data.data;
-
-        // Fetch reviews using filter by product_id
-        const reviewsResponse = await axiosInstance.get("/reviews", {
-          params: { product_id: id },
-        });
-        const reviews = reviewsResponse.data.data || [];
-
-        // Hitung harga baru jika ada diskon
-        const originalPrice = Number(item.price) || 0;
-        const discountPrice = Number(item.discount_price) || 0;
-        const newPrice = originalPrice - discountPrice;
-
-        const formattedProduct = {
-          ...item,
-          price: originalPrice,
-          oldPrice: item.old_price ? Number(item.old_price) : null,
-          discountPrice: discountPrice,
-          newPrice: newPrice,
-          reviews: reviews.map((review) => ({
-            userName: review.user?.name || "Anonim",
-            rating: review.rating || 0,
-            comment: review.comment || "Tidak ada komentar",
-          })),
-        };
-
-        setProduct(formattedProduct);
-      } catch (error) {
-        console.error("Error fetching product or reviews:", error);
-        setError(`Gagal memuat detail produk atau ulasan: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProduct();
-  }, [id]);
-
-  const handleAddToCart = async (item: Product): Promise<void> => {
+  const fetchProductData = async () => {
     try {
-      // Data yang akan dikirim ke axiosInstance
-      const cartData = {
-        product_id: parseInt(item.id.toString()), // Convert back to number for axiosInstance
-        user_id: 1, // TODO: Replace with actual user ID from auth context/storage
-        quantity: 1
+      setLoading(true);
+      // Cukup satu panggilan API
+      const response = await axiosInstance.get(`/products/${id}`);
+      const item = response.data.data;
+
+      // Semua data sudah ada di dalam 'item'
+      const categoryName = item.category?.name_category || "Tidak ada kategori";
+      const reviews = item.reviews || [];
+
+      const originalPrice = Number(item.price) || 0;
+      const discountPrice = Number(item.discount_price) || 0;
+      const newPrice = originalPrice - discountPrice;
+
+      const formattedProduct = {
+        ...item,
+        price: originalPrice,
+        oldPrice: item.old_price ? Number(item.old_price) : null,
+        discountPrice: discountPrice,
+        newPrice: newPrice,
+        reviews: reviews.map((review) => ({
+          // Akses data user yang sudah di-load oleh backend
+          userName: review.user?.name || "Anonim",
+          rating: review.rating || 0,
+          comment: review.comment || "Tidak ada komentar",
+        })),
+        categoryIcon: getCategoryIcon(categoryName),
+        category: categoryName,
+        description: item.description || "Tidak ada deskripsi",
       };
 
-      const response = await axiosInstance.post("/cart", cartData);
-      
-      if (response.status === 200 || response.status === 201) {
-        console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
-        router.push('/keranjang');
-      }
+      setProduct(formattedProduct);
     } catch (error) {
-      console.error("Error adding to cart:", error);
-      console.log("Gagal menambahkan item ke keranjang. Silakan coba lagi.");
+      console.error("Error fetching product data:", error);
+      if (error.response && error.response.status === 404) {
+        setError("Produk yang Anda cari tidak ditemukan.");
+      } else {
+        setError(`Gagal memuat detail produk: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
-};
+  };
+
+  fetchProductData();
+}, [id]);
 
   if (loading) {
     return (
@@ -122,7 +124,7 @@ export default function ProductDetail() {
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={() => window.location.reload()} // Reload page to retry
+          onPress={() => router.push("/")}
         >
           <Text style={styles.retryButtonText}>Coba Lagi</Text>
         </TouchableOpacity>
@@ -138,15 +140,14 @@ export default function ProductDetail() {
     );
   }
 
-  // Logika untuk handleAddToCart (mirip dengan HomeScreen)
-  // const handleAddToCart = (item) => {
-  //   if (item.stock_status === "available") {
-  //     router.push({
-  //       pathname: "/keranjang",
-  //       params: { item: JSON.stringify(item) },
-  //     });
-  //   }
-  // };
+  const handleAddToCart = (item) => {
+    if (item.stock_status === "available") {
+      router.push({
+        pathname: "/keranjang",
+        params: { item: JSON.stringify(item) },
+      });
+    }
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -161,8 +162,8 @@ export default function ProductDetail() {
       <Image
         source={{
           uri: product.image
-            ? `http://127.0.0.1:8000/storage/${product.image}`
-            : "http://127.0.0.1:8000/storage/placeholder.jpg",
+            ? `http://192.168.43.146:8000/storage/${product.image}`
+            : "http://192.168.43.146:8000/storage/placeholder.jpg",
         }}
         style={styles.productImage}
         resizeMode="cover"
@@ -171,12 +172,11 @@ export default function ProductDetail() {
 
       <View style={styles.infoContainer}>
         <Text style={styles.category}>
+          <Ionicons name={product.categoryIcon} size={12} color="#FFFFFF" />{" "}
           {product.category || "Tidak ada kategori"}
         </Text>
         <Text style={styles.name}>{product.name}</Text>
-        <Text style={styles.rating}>
-          ⭐ {product.rating || "N/A"} {product.sold || "0 terjual"}
-        </Text>
+        <Text style={styles.rating}>⭐ {product.rating || "N/A"}</Text>
 
         <View style={styles.priceContainer}>
           {product.discountPrice > 0 ? (
@@ -192,6 +192,9 @@ export default function ProductDetail() {
             <Text style={styles.price}>Rp {numberFormat(product.price)}</Text>
           )}
         </View>
+
+        {/* Tambahkan deskripsi produk di bawah harga */}
+        <Text style={styles.description}>{product.description}</Text>
 
         {product.stock_status === "out_of_stock" && (
           <Text style={styles.outOfStockText}>Habis</Text>
@@ -213,7 +216,6 @@ export default function ProductDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* Bagian Ulasan tetap dipertahankan */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ulasan Pelanggan</Text>
         {product.reviews && product.reviews.length > 0 ? (
@@ -250,7 +252,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
+    marginTop: 20,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
@@ -275,6 +278,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignSelf: "flex-start",
     marginBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
   },
   name: {
     fontSize: 16,
@@ -340,6 +345,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#4A5568",
     lineHeight: 22,
+    marginBottom: 6,
   },
   reviewContainer: {
     marginBottom: 16,

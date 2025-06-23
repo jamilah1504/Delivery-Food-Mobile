@@ -15,14 +15,19 @@ import { ms, ScaledSheet } from "react-native-size-matters";
 import { ThemedText } from "../../components/ThemedText";
 import { ThemedView } from "../../components/ThemedView";
 
-// 1. Import axiosInstance dan AsyncStorage secara langsung
-import axiosInstance from "../../utils/axiosInstance"; // Sesuaikan path
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { User, UserRole } from "../../utils/AuthContext"; // Asumsi tipe ada di context
-
+// *PERUBAHAN 1: Impor useAuth dari context Anda
+import { useAuth } from "../../utils/AuthContext"; // Sesuaikan path jika perlu
 import axios from 'axios';
+import { Link } from 'expo-router'; // 1. Impor Link
 
 // Tipe untuk response API
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  // Tambahkan properti user lain jika ada
+}
+
 interface AuthResponse {
   data: {
     user: User;
@@ -31,7 +36,9 @@ interface AuthResponse {
 }
 
 export default function SignIn() {
-  // 2. Gunakan state loading lokal, bukan dari context
+  // *PERUBAHAN 2: Dapatkan fungsi setToken dari useAuth
+  const { login } = useAuth();
+  
   const [isLoading, setIsLoading] = useState(false);
   const { height: windowHeight, width } = useWindowDimensions();
 
@@ -73,19 +80,15 @@ export default function SignIn() {
     return isValid;
   };
 
-  // 3. Fungsi handleSubmit diubah untuk memanggil axiosInstance
   const handleSubmit = async () => {
     if (!validate()) {
       return;
     }
 
-    console.log('[SignIn Component] Mencoba login dengan data:', form);
-
-    setIsLoading(true); // Mulai loading
+    setIsLoading(true);
     try {
-      // Panggil axiosInstance secara langsung
       const response = await axios.post<AuthResponse>(
-        `http://127.0.0.1:8000/api/login`,
+        `http://192.168.43.146:8000/api/login`, // Pastikan IP Address ini bisa diakses dari perangkat Anda
         {
           email: form.email,
           password: form.password,
@@ -98,32 +101,36 @@ export default function SignIn() {
         }
       );
 
-
       const { user, token } = response.data.data;
 
-      // Simpan token dan data user secara manual ke AsyncStorage
-      await AsyncStorage.setItem('userToken', token);
-      await AsyncStorage.setItem('userData', JSON.stringify(user));
+      // *PERUBAHAN 3: Gunakan setToken dari context! Ini adalah perbaikan utamanya.
+      // Ini akan memperbarui state DAN menyimpan token ke SecureStore.
+      await login(token, user);
 
-      // Tampilkan alert sukses dan navigasi secara manual
+      // Alert ini sekarang opsional, karena navigasi akan terjadi secara otomatis
+      // dari _layout.tsx. Tapi tidak apa-apa untuk menampilkannya.
       Alert.alert("Login Berhasil", `Selamat datang, ${user.name}!`);
-      router.replace("/home"); // Arahkan ke halaman utama
+
+      // Navigasi tidak lagi wajib di sini karena _layout.tsx akan menanganinya
+      // ketika `token` di context berubah. Namun, untuk transisi yang lebih cepat,
+      // Anda bisa tetap menyimpannya.
+      router.replace('/(tabs)/home');
 
     } catch (error: any) {
-      // Tangkap error langsung dari axios
       Alert.alert(
         "Login Gagal",
         error.response?.data?.message || "Email atau password salah."
       );
     } finally {
-      setIsLoading(false); // Selesai loading
+      setIsLoading(false);
     }
   };
 
-  // ... (Sisa kode JSX tetap sama persis)
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+    // *PERUBAHAN: Pastikan ScrollView juga memiliki background putih
+    <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: "#fff" }}>
       <ThemedView style={styles.wrapper}>
+        {/* *PERUBAHAN: ThemedView ini juga dipastikan putih lewat styles.inputContainer */}
         <ThemedView style={styles.inputContainer}>
           <Image
             source={require("@/assets/images/logo.png")}
@@ -151,7 +158,11 @@ export default function SignIn() {
             validationError={!!errors.password}
             validationErrorMessage={errors.password}
             icon={
-              <ThemedPressable onPress={() => setPasswordVisible((prev) => !prev)}>
+              // *PERUBAHAN: Menambahkan style={{ backgroundColor: 'transparent' }} untuk menghilangkan bg di ikon mata
+              <ThemedPressable 
+                onPress={() => setPasswordVisible((prev) => !prev)}
+                style={{ backgroundColor: 'transparent' }}
+              >
                 {isPasswordVisible ? (
                   <Feather name="eye-off" size={ms(22)} />
                 ) : (
@@ -173,26 +184,31 @@ export default function SignIn() {
             )}
           </ThemedPressable>
 
-          <ThemedText
-            onPress={() => router.push("/auth/sign-up")} // Diperbaiki di sini
-            style={styles.linkText}
-            type="link"
-          >
-            Belum punya akun? Daftar
-          </ThemedText>
+          {/* *PERUBAHAN 4: Perbaiki path navigasi ke halaman daftar */}
+        <ThemedText
+          onPress={() => {
+            router.push("/auth/sign-up"); // Path absolut ke halaman sign-up
+          }}
+          style={styles.linkText}
+          accessibilityRole="button"
+
+        >
+          Belum punya akun? Daftar
+        </ThemedText> 
         </ThemedView>
       </ThemedView>
     </ScrollView>
   );
 }
 
-// ... (Kode styles tetap sama persis)
+// Styles tetap sama, sudah diatur dengan background putih
 const styles = ScaledSheet.create({
     wrapper: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: "20@ms",
+      backgroundColor: "#fff", // <-- Latar belakang sudah putih
     },
     inputContainer: {
       flex: 1,
@@ -200,6 +216,7 @@ const styles = ScaledSheet.create({
       gap: "15@ms",
       width: "85%",
       maxWidth: 400,
+      backgroundColor: "#fff", // <-- Latar belakang sudah putih
     },
     logo: {
       width: "70%",
@@ -211,6 +228,7 @@ const styles = ScaledSheet.create({
     title: {
       textAlign: "center",
       marginBottom: "20@ms",
+      color: "#000"
     },
     buttonDisabled: {
       backgroundColor: "#ccc",

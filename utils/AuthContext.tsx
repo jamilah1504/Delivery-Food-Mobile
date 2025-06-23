@@ -1,160 +1,87 @@
-// src/context/AuthContext.tsx
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { useSegments, useRouter } from 'expo-router';
 
-import React, {
-  createContext,
-  useState,
-  useEffect,
-  ReactNode,
-  useContext,
-  useCallback,
-} from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiClient, { injectLogout } from './axiosInstance';
-
-// ===================================================================
-// TIPE DATA
-// ===================================================================
-
-export enum UserRole {
-  ADMIN = 'admin',
-  USER = 'user',
-}
-
+// 1. Definisikan interface untuk User
 export interface User {
   id: number;
   name: string;
   email: string;
-  email_verified_at: string | null;
-  created_at: string;
-  updated_at: string;
-  role: UserRole;
-  phone_number?: string;
-  profile_photo_url?: string;
+  // Tambahkan properti lain yang mungkin Anda dapatkan dari API
 }
 
-interface AuthResponse {
-  data: {
-    user: User;
-    token: string;
-  };
-}
-
-// Peningkatan 1: Tipe Context yang lebih kaya
-interface AuthContextType {
-  user: User | null;
-  /** `true` saat proses login/register sedang berjalan. */
-  isAuthLoading: boolean;
-  /** `true` saat sesi sedang divalidasi saat app start. */
-  isSessionLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  /** Fungsi untuk memeriksa peran pengguna. */
-  hasRole: (role: UserRole | UserRole[]) => boolean;
-}
-
-// ===================================================================
-// KODE KONTEKS OTENTIKASI
-// ===================================================================
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setAuthLoading] = useState<boolean>(false);
-  const [isSessionLoading, setSessionLoading] = useState<boolean>(true);
-
-  // Fungsi `logout` yang dimemoize
-  const logout = useCallback(async (): Promise<void> => {
-    console.log("Menjalankan fungsi logout...");
-    setUser(null);
-    await AsyncStorage.multiRemove(['userToken', 'userData']);
-  }, []);
-
-  // useEffect utama, hanya berjalan sekali
-  useEffect(() => {
-    injectLogout(logout);
-
-    // Peningkatan 2: Validasi sesi ke backend
-    const validateSession = async () => {
-      const userToken = await AsyncStorage.getItem('userToken');
-      if (!userToken) {
-        setSessionLoading(false);
-        return;
-      }
-      
-      try {
-        // Lakukan request ke endpoint yang dilindungi untuk memvalidasi token
-        const response = await apiClient.get<{ user: User }>('/user'); // Asumsi endpoint `/api/user` ada
-        // Jika berhasil, user dari respons adalah data ter-update
-        const latestUser = response.data.user; 
-        setUser(latestUser);
-        // Perbarui data user di storage jika perlu
-        await AsyncStorage.setItem('userData', JSON.stringify(latestUser));
-      } catch (error) {
-        console.log('Validasi token gagal, sesi tidak valid.', error);
-        await logout(); // Jika token tidak valid, hapus sesi
-      } finally {
-        setSessionLoading(false);
-      }
-    };
-    
-    validateSession();
-  }, [logout]);
-
-  const handleAuthSuccess = async (userData: User, userToken: string): Promise<void> => {
-    setUser(userData);
-    await AsyncStorage.setItem('userToken', userToken);
-    await AsyncStorage.setItem('userData', JSON.stringify(userData));
-  };
-
-  const login = useCallback(async (email: string, password: string): Promise<void> => {
-    setAuthLoading(true);
-    try {
-      const response = await apiClient.post<AuthResponse>('/login', { email, password });
-      await handleAuthSuccess(response.data.data.user, response.data.data.token);
-    } catch (e: any) {
-      throw new Error(e.response?.data?.message || 'Login gagal.');
-    } finally {
-      setAuthLoading(false);
-    }
-  }, []);
-
-  const register = useCallback(async (name: string, email: string, password: string): Promise<void> => {
-    setAuthLoading(true);
-    try {
-      const response = await apiClient.post<AuthResponse>('/register', { name, email, password });
-      await handleAuthSuccess(response.data.data.user, response.data.data.token);
-    } catch (e: any) {
-      throw new Error(e.response?.data?.message || 'Registrasi gagal.');
-    } finally {
-      setAuthLoading(false);
-    }
-  }, []);
-
-  // Peningkatan 3: Fungsi helper untuk RBAC (Role-Based Access Control)
-  const hasRole = useCallback((requiredRole: UserRole | UserRole[]): boolean => {
-    if (!user) {
-      return false;
-    }
-    if (Array.isArray(requiredRole)) {
-      return requiredRole.includes(user.role);
-    }
-    return user.role === requiredRole;
-  }, [user]);
-
-  return (
-    <AuthContext.Provider value={{ login, logout, register, user, isAuthLoading, isSessionLoading, hasRole }}>
-      {children}
-    </AuthContext.Provider>
-  );
+// 2. Perbarui tipe Context untuk menyertakan 'user' dan fungsi 'login'
+type AuthContextType = {
+  token: string | null;
+  user: User | null; // <-- Tambahkan state untuk user
+  login: (token: string, userData: User) => Promise<void>; // <-- Fungsi baru
+  logout: () => void;
+  isLoading: boolean;
 };
 
-// Custom hook untuk menggunakan context
-export const useAuth = (): AuthContextType => {
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null); // <-- State baru untuk data user
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadAuthData = async () => {
+      try {
+        // 3. Muat token dan data user dari penyimpanan
+        const storedToken = await SecureStore.getItemAsync('user_token');
+        const storedUser = await SecureStore.getItemAsync('user_data');
+
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser)); // <-- Parse data user dari string JSON
+        }
+      } catch (e) {
+        console.error("Failed to load auth data", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAuthData();
+  }, []);
+
+  // 4. Buat fungsi 'login' yang menangani token dan data user
+  const login = async (newToken: string, userData: User) => {
+    setToken(newToken);
+    setUser(userData);
+    await SecureStore.setItemAsync('user_token', newToken);
+    await SecureStore.setItemAsync('user_data', JSON.stringify(userData)); // <-- Simpan data user sebagai string JSON
+  };
+
+  // 5. Perbarui fungsi 'logout' untuk membersihkan data user juga
+  const logout = async () => {
+    setToken(null);
+    setUser(null);
+    await SecureStore.deleteItemAsync('user_token');
+    await SecureStore.deleteItemAsync('user_data'); // <-- Hapus data user
+  };
+
+  const value = {
+    token,
+    user, // <-- Sediakan user di dalam context
+    login, // <-- Sediakan fungsi login
+    logout,
+    isLoading,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}

@@ -1,4 +1,3 @@
-import axiosInstance from "@/utils/axiosInstance";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useRouter } from "expo-router";
@@ -17,7 +16,7 @@ import {
 
 // Konfigurasi axios
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: "http://192.168.43.146:8000/api",
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -122,7 +121,10 @@ const getProducts = async () => {
         : []) || []
     );
   } catch (error) {
-    console.error("Error fetching products:", error.message);
+    console.error(
+      "Error fetching products:",
+      error.response?.data || error.message
+    );
     return [];
   }
 };
@@ -197,27 +199,20 @@ export default function HomeScreen() {
     });
   }, [products, searchQuery, selectedCategory]);
 
- const handleAddToCart = async (item: Product): Promise<void> => {
-    try {
-      // Data yang akan dikirim ke axiosInstance
-      const cartData = {
-        product_id: parseInt(item.id.toString()), // Convert back to number for axiosInstance
-        user_id: 1, // TODO: Replace with actual user ID from auth context/storage
-        quantity: 1
-      };
-
-      const response = await axiosInstance.post("/cart", cartData);
-      
-      if (response.status === 200 || response.status === 201) {
-        console.log(`${item.name} berhasil ditambahkan ke keranjang!`);
-        router.push('/keranjang');
-      }
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      console.log("Gagal menambahkan item ke keranjang. Silakan coba lagi.");
+  // Fungsi navigasi
+  const handleAddToCart = (item) => {
+    // Validasi dan log untuk debugging
+    console.log("Adding to cart:", item);
+    console.log("Price type:", typeof item.price, "Value:", item.price);
+    if (isNaN(item.price) || item.price === null || item.price === undefined) {
+      console.warn("Invalid price detected, defaulting to 0");
+      item.price = 0; // Default jika price tidak valid
     }
-};
-
+    router.push({
+      pathname: "/keranjang",
+      params: { item: JSON.stringify(item) },
+    });
+  };
 
   const goToNotifications = () => {
     router.push("/property/notifications");
@@ -310,8 +305,8 @@ export default function HomeScreen() {
                 <Image
                   source={{
                     uri: item.image
-                      ? `http://127.0.0.1:8000/storage/${item.image}`
-                      : "http://127.0.0.1:8000/storage/placeholder.jpg",
+                      ? `http://192.168.43.146:8000/storage/${item.image}`
+                      : "http://192.168.43.146:8000/storage/placeholder.jpg",
                   }}
                   style={styles.terlarisImage}
                   resizeMode="cover"
@@ -407,8 +402,8 @@ export default function HomeScreen() {
               <Image
                 source={{
                   uri: item.image
-                    ? `http://127.0.0.1:8000/storage/${item.image}`
-                    : "http://127.0.0.1:8000/storage/placeholder.jpg",
+                    ? `http://192.168.43.146:8000/storage/${item.image}`
+                    : "http://192.168.43.146:8000/storage/placeholder.jpg",
                 }}
                 style={styles.productImage}
                 resizeMode="cover"
@@ -419,9 +414,7 @@ export default function HomeScreen() {
                   {item.category || "Tidak ada kategori"}
                 </Text>
                 <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.rating}>
-                  ⭐ {item.rating || "N/A"} {item.sold || "0 terjual"}
-                </Text>
+                <Text style={styles.rating}>⭐ {item.rating || "N/A"}</Text>
                 {/* Kondisi 3 & 4: Tampilkan harga */}
                 {discountPrice > 0 ? (
                   <>

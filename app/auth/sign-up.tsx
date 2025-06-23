@@ -273,7 +273,7 @@ export default function SignUp() {
           {apiError ? <ThemedText style={styles.errorText}>{apiError}</ThemedText> : null}
 
           <ThemedText
-            onPress={() => router.push("/auth/sign-up")}
+            onPress={() => router.push("./auth/sign-in")}
             style={styles.linkText}
             type="link"
           >

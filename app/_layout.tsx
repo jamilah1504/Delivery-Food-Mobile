@@ -1,41 +1,37 @@
-// File: app/_layout.tsx
+import { Stack, useRouter, useSegments } from "expo-router";
+import { AuthProvider, useAuth } from "../utils/AuthContext"; // Sesuaikan path jika perlu
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
 
-import { AuthProvider, useAuth } from '../utils/AuthContext'; // Sesuaikan path ke AuthContext
-import { useFonts } from 'expo-font';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ActivityIndicator, View } from 'react-native';
-
-// Mencegah splash screen hilang otomatis sebelum aset (font) dimuat
-SplashScreen.preventAutoHideAsync();
-
-function InitialLayout() {
-  const { user, isSessionLoading } = useAuth();
-  const segments = useSegments();
+/**
+ * Komponen ini menangani logika navigasi utama.
+ * Ia akan memeriksa status autentikasi dan mengarahkan pengguna
+ * ke halaman yang sesuai (grup '(auth)' atau '(tabs)').
+ */
+const InitialLayout = () => {
+  const { token, isLoading } = useAuth();
+  const segments = useSegments(); // Mendapatkan path rute saat ini
   const router = useRouter();
 
-  // useEffect(() => {
-  //   // Jika sesi selesai loading, kita bisa mulai navigasi
-  //   if (!isSessionLoading) {
-  //     const inAuthGroup = segments[0] === '(auth)';
+  useEffect(() => {
+    // Jangan lakukan apa-apa jika masih loading
+    if (isLoading) return;
 
-  //     // Jika user tidak login dan tidak berada di halaman auth, lempar ke login
-  //     if (!user && !inAuthGroup) {
-  //       router.replace('/auth/sign-in');
-  //     } 
-  //     // Jika user sudah login dan masih di halaman auth, lempar ke home
-  //     else if (user && inAuthGroup) {
-  //       router.replace('/(tabs)/home');
-  //     }
-  //   }
-  // }, [user, isSessionLoading, segments]);
+    const inAuthGroup = segments[0] === '(auth)';
 
-  // Tampilkan loading indicator saat sesi sedang divalidasi
-  // atau saat user belum siap dan navigasi belum di-redirect.
-  if (isSessionLoading) {
+    // Jika pengguna memiliki token tapi masih di halaman auth, arahkan ke home.
+    if (token && inAuthGroup) {
+      router.replace('/(tabs)/home'); 
+    } 
+    // Jika pengguna tidak punya token dan tidak sedang di halaman auth, arahkan ke login.
+    else if (!token && !inAuthGroup) {
+      router.replace('/auth/sign-in');
+    }
+
+  }, [token, isLoading, segments]); // Jalankan efek ini jika token atau status loading berubah
+
+  // Tampilkan loading indicator saat context sedang memeriksa token
+  if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" />
@@ -43,43 +39,29 @@ function InitialLayout() {
     );
   }
 
+  // Tampilkan stack navigasi setelah loading selesai
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(auth)" />
-      {/* Tambahkan screen lain di luar tabs dan auth di sini jika ada */}
+      {/* Rute utama aplikasi berada di dalam grup (tabs) */}
+      <Stack.Screen name="(tabs)" /> 
+      <Stack.Screen name="auth" /> 
+      <Stack.Screen name="property" /> 
+      {/* Rute autentikasi berada di root */}
+      <Stack.Screen name="sign-in" />
+      <Stack.Screen name="sign-up" />
+      {/* Tambahkan rute lain yang tidak termasuk dalam tabs atau auth di sini */}
     </Stack>
   );
-}
+};
 
+/**
+ * Ini adalah Root Layout yang sebenarnya.
+ * Membungkus semua dengan AuthProvider agar state tersedia di mana saja.
+ */
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  // Handle error saat memuat font
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  // Sembunyikan splash screen setelah font selesai dimuat
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null; // Tampilkan splash screen
-  }
-
   return (
-    // 1. AuthProvider membungkus semua navigasi
     <AuthProvider>
-      {/* 2. GestureHandler dibutuhkan untuk beberapa komponen UI */}
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <InitialLayout />
-      </GestureHandlerRootView>
+      <InitialLayout />
     </AuthProvider>
   );
 }

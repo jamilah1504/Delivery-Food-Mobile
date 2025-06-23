@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import axios from "axios";
 import axiosInstance from "@/utils/axiosInstance";
+import { useAuth } from "@/utils/AuthContext";
+
 
 type CartItem = {
   id: string;
@@ -25,35 +27,46 @@ type CartItem = {
   quantity: number;
 };
 
-const USER_ID = 1; // Default user_id
 
 export default function Keranjang() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth(); // Dapatkan fungsi logout dari context
+const USER_ID = user?.id;
 
+const fetchCartItems = async () => {
+  // Pastikan kita punya USER_ID sebelum fetch
+  if (!USER_ID) {
+    console.log("User ID belum tersedia, fetch dibatalkan.");
+    // Anda bisa hentikan loading di sini jika perlu
+    // setLoading(false);
+    return;
+  }
 
-  const fetchCartItems = async () => {
-    try {
-      setLoading(true);
-      const response = await axiosInstance.get('/cart/1');
-      console.log("Cart response:", response.data); // Debug response
-      const cartData = response.data.cart || [];
-      // Validate cart items
-      if (Array.isArray(cartData)) {
-        setCartItems(cartData);
-      } else {
-        console.warn("Invalid cart data format:", cartData);
-        setCartItems([]);
-      }
-    } catch (error) {
-      console.error("Error fetching cart items:", error);
-      Alert.alert("Error", "Gagal mengambil data keranjang");
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    // PERBAIKAN: Gunakan backtick (`) bukan kutip tunggal (')
+    const response = await axiosInstance.get(`/cart/${USER_ID}`);
+    
+    console.log("Cart response:", response.data);
+    
+    // Logika Anda selanjutnya sudah bagus
+    const cartData = response.data.cart || [];
+    if (Array.isArray(cartData)) {
+      setCartItems(cartData);
+    } else {
+      console.warn("Invalid cart data format:", cartData);
+      setCartItems([]);
     }
-  };
+  } catch (error) {
+    console.error("Error fetching cart items:", error);
+    Alert.alert("Error", "Gagal mengambil data keranjang");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Add item to cart via axiosInstance
   const addToCart = async (productId: string, quantity: number = 1) => {
@@ -303,7 +316,7 @@ export default function Keranjang() {
             <View style={styles.cartItem}>
               <Image
                 source={{
-                  uri: `http://127.0.0.1:8000/storage/${
+                  uri: `http://192.168.43.146:8000/storage/${
                     item.product?.image || "placeholder.jpg"
                   }`,
                 }}
