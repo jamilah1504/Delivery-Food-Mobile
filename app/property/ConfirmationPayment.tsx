@@ -309,7 +309,8 @@ export default function ConfirmationScreen() {
 const styles = StyleSheet.create({
     container: { 
       flex: 1, 
-      backgroundColor: "#fff" 
+      backgroundColor: "#fff",
+      paddingTop: 10
     },
     disabledInput: {
         backgroundColor: '#f0f0f0', // Warna abu-abu untuk field yang tidak bisa diedit

@@ -64,6 +64,12 @@ export default function AppLayout() {
             }}
           />
           <Tabs.Screen
+            name="explore"
+            options={{
+              href: null, // Gunakan href: null di dalam options
+            }}
+          />
+          <Tabs.Screen
             name="home"
             options={{
               title: "Home",
@@ -71,19 +77,6 @@ export default function AppLayout() {
                 <AntDesign
                   name="home"
                   size={24}
-                  color={focused ? "#2E5BFF" : "#999"}
-                />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="explore"
-            options={{
-              title: "Explore",
-              tabBarIcon: ({ focused }) => (
-                <IconSymbol
-                  size={28}
-                  name="paperplane.fill"
                   color={focused ? "#2E5BFF" : "#999"}
                 />
               ),

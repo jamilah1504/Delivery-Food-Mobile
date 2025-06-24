@@ -1,3 +1,14 @@
+// di file (tabs)/explore.tsx
+import { Text, View } from 'react-native';
+
+export default function ExploreScreen() { // atau const ExploreScreen = () => { ... }; export default ExploreScreen;
+  return (
+    <View>
+      <Text>Explore Screen</Text>
+    </View>
+  );
+}
+
 // import { Image } from 'expo-image';
 // import { Platform, StyleSheet } from 'react-native';
 

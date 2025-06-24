@@ -178,7 +178,7 @@ export default function SignUp() {
       Alert.alert(
         "Pendaftaran Berhasil",
         "Akun Anda telah berhasil dibuat. Silakan login.",
-        [{ text: "OK", onPress: () => router.replace("/sign-in") }]
+        [{ text: "OK", onPress: () => router.replace("./sign-in") }]
       );
 
     } catch (err: any) {

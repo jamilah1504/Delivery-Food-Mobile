@@ -17,39 +17,49 @@ const InitialLayout = () => {
     // Jangan lakukan apa-apa jika masih loading
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
+    // Cek apakah rute saat ini berada di dalam grup '(auth)'
+    // Contoh: '/(auth)/sign-in' -> segments akan menjadi ['(auth)', 'sign-in']
+    const inAuthGroup = segments[0] === 'auth';
 
     // Jika pengguna memiliki token tapi masih di halaman auth, arahkan ke home.
     if (token && inAuthGroup) {
       router.replace('/(tabs)/home'); 
     } 
-    // Jika pengguna tidak punya token dan tidak sedang di halaman auth, arahkan ke login.
+    // Jika pengguna TIDAK punya token dan TIDAK sedang di grup auth,
+    // artinya mereka mencoba mengakses halaman yang dilindungi.
+    // Arahkan ke halaman sign-in sebagai default.
     else if (!token && !inAuthGroup) {
       router.replace('/auth/sign-in');
     }
+    // Jika kondisi di atas tidak terpenuhi, biarkan saja.
+    // Ini mencakup kasus di mana:
+    // 1. Pengguna tidak punya token, TAPI sudah di dalam grup auth (misal: di sign-in atau sign-up).
+    //    Ini memungkinkan navigasi dari sign-in ke sign-up.
+    // 2. Pengguna punya token dan tidak di grup auth (sudah di dalam aplikasi).
 
-  }, [token, isLoading, segments]); // Jalankan efek ini jika token atau status loading berubah
+  }, [token, isLoading, segments]); // Jalankan efek ini jika dependensi berubah
 
   // Tampilkan loading indicator saat context sedang memeriksa token
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
 
   // Tampilkan stack navigasi setelah loading selesai
+  // Pastikan struktur rute Anda sesuai dengan file di direktori /app
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* Rute utama aplikasi berada di dalam grup (tabs) */}
+      {/* Grup untuk halaman setelah login */}
       <Stack.Screen name="(tabs)" /> 
+      {/* Grup untuk halaman autentikasi (sign-in, sign-up, dll) */}
       <Stack.Screen name="auth" /> 
+      {/* Rute lainnya di luar grup utama */}
       <Stack.Screen name="property" /> 
-      {/* Rute autentikasi berada di root */}
-      <Stack.Screen name="sign-in" />
-      <Stack.Screen name="sign-up" />
-      {/* Tambahkan rute lain yang tidak termasuk dalam tabs atau auth di sini */}
+      {/* Anda tidak perlu mendefinisikan screen di sini jika sudah diatur oleh layout di dalam grup */}
+      {/* Contoh: (auth)/_layout.js akan menangani 'sign-in' dan 'sign-up' */}
     </Stack>
   );
 };
